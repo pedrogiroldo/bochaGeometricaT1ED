@@ -1,26 +1,21 @@
-PROJ_NAME=ted
-ALUNO=
-LIBS=
-OBJETOS=src/main.o src/lib/args_handler/args_handler.o
-# compilador
-CC=gcc
-# Flags
+# Makefile atualizado para automatizar OBJETOS e dependências
+PROJ_NAME = ted
+LIBS =
+SRC_FILES := $(wildcard src/**/*.c)  # Busca recursiva por arquivos .c
+OBJETOS := $(SRC_FILES:.c=.o)       # Substitui .c por .o
 
-CFLAGS= -ggdb -O0 -std=c99 -fstack-protector-all -Werror=implicit-function-declaration
+# Compilador e Flags
+CC = gcc
+CFLAGS = -ggdb -O0 -std=c99 -fstack-protector-all -Werror=implicit-function-declaration -MMD
+LDFLAGS = -O0
 
-LDFLAGS=-O0
+# Regra principal
 $(PROJ_NAME): $(OBJETOS)
 	$(CC) -o $(PROJ_NAME) $(LDFLAGS) $(OBJETOS) $(LIBS)
-%.o : %.c
+
+# Regra para compilar arquivos .c em .o com dependências
+%.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
-#
-# COLOCAR DEPENDENCIAS DE CADA MODULO
-#
-# Exemplo: suponha que o arquivo a.c possua os seguintes includes:
-#
-# #include "a.h"
-# #include "b.h"
-# #include "c.h"
-#
-# a.o: a.h b.h c.h a.c
-src/main.o: src/main.c src/lib/args_handler/args_handler.h
+
+# Incluir dependências geradas automaticamente
+-include $(OBJETOS:.o=.d)
