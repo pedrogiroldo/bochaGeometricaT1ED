@@ -1,0 +1,3 @@
+/*
+This module contain the functions that will be used to read the .geo and .qry.
+*/

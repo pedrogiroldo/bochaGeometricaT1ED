@@ -1,0 +1,29 @@
+---
+globs: *.c,*.h
+description: C code commenting standards
+---
+
+# C Code Commenting Standards
+
+All comments in C code must be written in English.
+
+## Comment Guidelines:
+
+- Use English for all comments, documentation, and variable names
+- Write clear, descriptive comments that explain the purpose and functionality
+- Use Doxygen-style comments for function documentation
+- Avoid Portuguese or other languages in code comments
+
+## Examples:
+
+```c
+// Good - English comment
+/**
+ * Creates a new queue instance
+ * @return Pointer to new queue or NULL on error
+ */
+Queue *queue_create(void);
+
+// Bad - Portuguese comment
+// Cria uma nova instância da fila
+```

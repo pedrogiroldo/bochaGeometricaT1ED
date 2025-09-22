@@ -1,0 +1,47 @@
+---
+globs: *.h
+description: C header file opaque pointer requirements
+---
+
+# C Header File Opaque Pointer Requirements
+
+Struct declarations are NOT allowed in header files (.h). Use opaque pointers to hide implementation details.
+
+## Rules:
+
+- **NO struct definitions in .h files**
+- Use forward declarations with `typedef struct TypeName TypeName;`
+- Implement the complete struct definition only in .c files
+- This ensures proper encapsulation and information hiding
+
+## Correct Pattern:
+
+```c
+// In header file (.h)
+typedef struct Queue Queue;  // Forward declaration only
+
+Queue *queue_create(void);
+void queue_destroy(Queue *queue);
+```
+
+```c
+// In implementation file (.c)
+struct Queue {  // Complete definition here
+    QueueNode *front;
+    QueueNode *rear;
+    int size;
+};
+```
+
+## Incorrect Pattern:
+
+```c
+// DON'T DO THIS in .h files
+struct Queue {
+    QueueNode *front;
+    QueueNode *rear;
+    int size;
+};
+```
+
+This approach provides better encapsulation and allows for implementation changes without affecting client code.
