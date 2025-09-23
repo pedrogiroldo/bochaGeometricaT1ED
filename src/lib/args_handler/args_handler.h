@@ -1,3 +1,9 @@
+/*
+    This module contains the functions that will
+    be used to handle the arguments
+    that will be passed to the program
+
+*/
 #ifndef ARGS_HANDLER_H
 #define ARGS_HANDLER_H
 
