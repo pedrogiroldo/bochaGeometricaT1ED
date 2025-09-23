@@ -1,0 +1,62 @@
+---
+description: C99 standard compliance rules
+globs: *.c,*.h
+---
+
+# C99 Standard Compliance
+
+This project must strictly follow the C99 standard without GNU extensions.
+
+## Prohibited GNU Extensions
+
+- **DO NOT** use `_GNU_SOURCE` or any other feature test macros
+- **DO NOT** use `getline()` - use `fgets()` instead
+- **DO NOT** use `strdup()` - implement manual string duplication
+- **DO NOT** use `ssize_t` - use `size_t` or `int` instead
+
+## Required Alternatives
+
+### Instead of `getline()`:
+
+```c
+char buffer[1024];
+while (fgets(buffer, sizeof(buffer), file)) {
+    // Process line
+}
+```
+
+### Instead of `strdup()`:
+
+```c
+char* duplicate_string(const char* s) {
+    size_t len = strlen(s) + 1;
+    char* dup = malloc(len);
+    if (dup) {
+        strcpy(dup, s);
+    }
+    return dup;
+}
+```
+
+### Instead of `ssize_t`:
+
+```c
+int read;  // or size_t read;
+```
+
+## Compilation Flags
+
+The Makefile uses strict C99 compliance:
+
+- `-std=c99` - Enforce C99 standard
+- `-Werror=implicit-function-declaration` - Treat implicit declarations as errors
+- No feature test macros allowed
+
+## Code Review Checklist
+
+- [ ] No `_GNU_SOURCE` or similar macros
+- [ ] No `getline()` usage
+- [ ] No `strdup()` usage
+- [ ] No `ssize_t` usage
+- [ ] All functions properly declared
+- [ ] Code compiles with strict C99 flags
