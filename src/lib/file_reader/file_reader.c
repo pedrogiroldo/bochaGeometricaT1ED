@@ -58,6 +58,7 @@ const char *get_file_name(const FileData *fileData) {
   return fileData->filename;
 }
 
+// Gets the file lines queue
 const Queue *get_file_lines_queue(const FileData *fileData) {
   return fileData->linesQueue;
 }
