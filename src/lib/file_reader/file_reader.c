@@ -47,3 +47,17 @@ Queue *read_file_lines(const char *filepath) {
   fclose(file);
   return lines;
 }
+
+// Gets the file path
+const char *get_file_path(const FileData *fileData) {
+  return fileData->filepath;
+}
+
+// Gets the file name
+const char *get_file_name(const FileData *fileData) {
+  return fileData->filename;
+}
+
+const Queue *get_file_lines_queue(const FileData *fileData) {
+  return fileData->linesQueue;
+}
