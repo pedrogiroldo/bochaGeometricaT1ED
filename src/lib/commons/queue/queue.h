@@ -1,3 +1,10 @@
+/*
+    This module contains the implementation of the queue
+    that will be used in the project
+
+    Here you can find all the functions you need to use
+    and manipulate a queue
+*/
 #ifndef QUEUE_H
 #define QUEUE_H
 
