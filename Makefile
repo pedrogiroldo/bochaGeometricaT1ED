@@ -30,3 +30,6 @@ clean:
 debug:
 	@echo "SRC_FILES: $(SRC_FILES)"
 	@echo "OBJETOS: $(OBJETOS)"
+
+run:
+	./$(PROJ_NAME) -f src/test/test.geo -o src/test/results -q src/test/test.qry
