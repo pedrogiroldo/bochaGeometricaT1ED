@@ -15,19 +15,36 @@ typedef struct FileData {
   Queue *linesQueue;
 } FileData;
 
-// Reads the file and returns a FileData struct
-FileData read_file(const char *filepath) {
-  FileData file;
-  file.filepath = filepath;
-  file.filename =
+// Creates a new FileData instance and reads the file
+FileData *file_data_create(const char *filepath) {
+  FileData *file = malloc(sizeof(FileData));
+  if (file == NULL) {
+    printf("Error: Failed to allocate memory for FileData\n");
+    return NULL;
+  }
+
+  file->filepath = filepath;
+  file->filename =
       strrchr(filepath, '/') ? strrchr(filepath, '/') + 1 : filepath;
+
   Queue *linesQueue = read_file_to_queue(filepath);
   if (linesQueue == NULL) {
     printf("Error: Failed to read the file lines\n");
-    exit(1);
+    free(file);
+    return NULL;
   }
-  file.linesQueue = linesQueue;
+  file->linesQueue = linesQueue;
   return file;
+}
+
+// Destroys a FileData instance and frees memory
+void file_data_destroy(FileData *fileData) {
+  if (fileData != NULL) {
+    if (fileData->linesQueue != NULL) {
+      queue_destroy(fileData->linesQueue);
+    }
+    free(fileData);
+  }
 }
 
 // Reads the file lines and returns a Queue. This function is private.

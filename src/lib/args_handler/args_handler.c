@@ -13,6 +13,7 @@ char *get_option_value(int argc, char *argv[], char *opt_name) {
 
   for (int i = 1; i < argc - 1; ++i) {
     if (strcmp(argv[i], opt_format) == 0) {
+      if (argv[i + 1] == NULL) return NULL;
       return argv[i + 1];
     }
   }

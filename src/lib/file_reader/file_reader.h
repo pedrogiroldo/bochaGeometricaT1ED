@@ -8,8 +8,12 @@
 #include "../commons/queue/queue.h"
 
 typedef struct FileData FileData;
-// Reads the file and returns a FileData struct
-FileData read_file(const char *filepath);
+
+// Creates a new FileData instance and reads the file
+FileData *file_data_create(const char *filepath);
+
+// Destroys a FileData instance and frees memory
+void file_data_destroy(FileData *fileData);
 
 // Gets the file path
 const char *get_file_path(const FileData *fileData);
