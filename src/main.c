@@ -1,5 +1,5 @@
 #include "lib/args_handler/args_handler.h"
-#include "lib/commons/queue/queue.h"
+#include "lib/geo_handler/geo_handler.h"
 #include "lib/file_reader/file_reader.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,12 +23,13 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  const Queue lines = get_file_lines_queue(file);
-  printf("File: %s\n", get_file_name(file));
-  printf("Lines: %d\n", queue_size(lines));
-  printf("Peek: %s\n", (char *)queue_dequeue(lines));
+ 
+
+  execute_geo_commands(get_file_lines_queue(file));
 
   file_data_destroy(file);
+
+
 
   return 0;
 }
