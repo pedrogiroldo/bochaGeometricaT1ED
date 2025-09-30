@@ -7,21 +7,21 @@
 
 #include "../commons/queue/queue.h"
 
-typedef struct FileData FileData;
+typedef void *FileData;
 
 // Creates a new FileData instance and reads the file
-FileData *file_data_create(const char *filepath);
+FileData file_data_create(const char *filepath);
 
 // Destroys a FileData instance and frees memory
-void file_data_destroy(FileData *fileData);
+void file_data_destroy(FileData fileData);
 
 // Gets the file path
-const char *get_file_path(const FileData *fileData);
+const char *get_file_path(const FileData fileData);
 
 // Gets the file name
-const char *get_file_name(const FileData *fileData);
+const char *get_file_name(const FileData fileData);
 
 // Gets the file lines queue
-const Queue *get_file_lines_queue(const FileData *fileData);
+const Queue get_file_lines_queue(const FileData fileData);
 
 #endif // FILE_READER_H

@@ -6,18 +6,18 @@
 #include <string.h>
 
 // Private functions
-static Queue *read_file_to_queue(const char *filepath);
+static Queue read_file_to_queue(const char *filepath);
 static char *read_line(FILE *file, char *buffer, size_t size);
 
-typedef struct FileData {
+struct FileData {
   const char *filepath;
   const char *filename;
-  Queue *linesQueue;
-} FileData;
+  Queue linesQueue;
+};
 
 // Creates a new FileData instance and reads the file
-FileData *file_data_create(const char *filepath) {
-  FileData *file = malloc(sizeof(FileData));
+FileData file_data_create(const char *filepath) {
+  struct FileData *file = malloc(sizeof(struct FileData));
   if (file == NULL) {
     printf("Error: Failed to allocate memory for FileData\n");
     return NULL;
@@ -27,29 +27,30 @@ FileData *file_data_create(const char *filepath) {
   file->filename =
       strrchr(filepath, '/') ? strrchr(filepath, '/') + 1 : filepath;
 
-  Queue *linesQueue = read_file_to_queue(filepath);
+  Queue linesQueue = read_file_to_queue(filepath);
   if (linesQueue == NULL) {
     printf("Error: Failed to read the file lines\n");
     free(file);
     return NULL;
   }
   file->linesQueue = linesQueue;
-  return file;
+  return (FileData)file;
 }
 
 // Destroys a FileData instance and frees memory
-void file_data_destroy(FileData *fileData) {
+void file_data_destroy(FileData fileData) {
   if (fileData != NULL) {
-    if (fileData->linesQueue != NULL) {
-      queue_destroy(fileData->linesQueue);
+    struct FileData *file = (struct FileData *)fileData;
+    if (file->linesQueue != NULL) {
+      queue_destroy(file->linesQueue);
     }
-    free(fileData);
+    free(file);
   }
 }
 
 // Reads the file lines and returns a Queue. This function is private.
-Queue *read_file_to_queue(const char *filepath) {
-  Queue *lines = queue_create();
+Queue read_file_to_queue(const char *filepath) {
+  Queue lines = queue_create();
   FILE *file = fopen(filepath, "r");
   if (file == NULL) {
     return NULL;
@@ -65,18 +66,21 @@ Queue *read_file_to_queue(const char *filepath) {
 }
 
 // Gets the file path
-const char *get_file_path(const FileData *fileData) {
-  return fileData->filepath;
+const char *get_file_path(const FileData fileData) {
+  struct FileData *file = (struct FileData *)fileData;
+  return file->filepath;
 }
 
 // Gets the file name
-const char *get_file_name(const FileData *fileData) {
-  return fileData->filename;
+const char *get_file_name(const FileData fileData) {
+  struct FileData *file = (struct FileData *)fileData;
+  return file->filename;
 }
 
 // Gets the file lines queue
-const Queue *get_file_lines_queue(const FileData *fileData) {
-  return fileData->linesQueue;
+const Queue get_file_lines_queue(const FileData fileData) {
+  struct FileData *file = (struct FileData *)fileData;
+  return file->linesQueue;
 }
 
 // Reads a line from file using fgets

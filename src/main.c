@@ -17,16 +17,16 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  FileData *file = file_data_create(geo_input_path);
+  FileData file = file_data_create(geo_input_path);
   if (file == NULL) {
     printf("Error: Failed to create FileData\n");
     exit(1);
   }
 
-  const Queue *lines = get_file_lines_queue(file);
+  const Queue lines = get_file_lines_queue(file);
   printf("File: %s\n", get_file_name(file));
-  printf("Lines: %d\n", queue_size((Queue *)lines));
-  printf("Peek: %s\n", (char *)queue_dequeue((Queue *)lines));
+  printf("Lines: %d\n", queue_size(lines));
+  printf("Peek: %s\n", (char *)queue_dequeue(lines));
 
   file_data_destroy(file);
 

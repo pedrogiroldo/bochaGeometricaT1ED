@@ -18,8 +18,8 @@ struct Queue {
  * Creates a new empty queue
  * @return Pointer to new queue or NULL on error
  */
-Queue *queue_create(void) {
-  Queue *queue = (Queue *)malloc(sizeof(Queue));
+Queue queue_create(void) {
+  struct Queue *queue = (struct Queue *)malloc(sizeof(struct Queue));
   if (queue == NULL) {
     return NULL;
   }
@@ -28,14 +28,14 @@ Queue *queue_create(void) {
   queue->rear = NULL;
   queue->size = 0;
 
-  return queue;
+  return (Queue)queue;
 }
 
 /**
  * Destroys the queue and frees all associated memory
  * @param queue Pointer to queue to be destroyed
  */
-void queue_destroy(Queue *queue) {
+void queue_destroy(Queue queue) {
   if (queue == NULL) {
     return;
   }
@@ -50,11 +50,12 @@ void queue_destroy(Queue *queue) {
  * @param data Data to be added
  * @return true on success, false on error
  */
-bool queue_enqueue(Queue *queue, void *data) {
+bool queue_enqueue(Queue queue, void *data) {
   if (queue == NULL) {
     return false;
   }
 
+  struct Queue *q = (struct Queue *)queue;
   QueueNode *new_node = (QueueNode *)malloc(sizeof(QueueNode));
   if (new_node == NULL) {
     return false;
@@ -64,14 +65,14 @@ bool queue_enqueue(Queue *queue, void *data) {
   new_node->next = NULL;
 
   if (queue_is_empty(queue)) {
-    queue->front = new_node;
-    queue->rear = new_node;
+    q->front = new_node;
+    q->rear = new_node;
   } else {
-    queue->rear->next = new_node;
-    queue->rear = new_node;
+    q->rear->next = new_node;
+    q->rear = new_node;
   }
 
-  queue->size++;
+  q->size++;
   return true;
 }
 
@@ -80,23 +81,24 @@ bool queue_enqueue(Queue *queue, void *data) {
  * @param queue Pointer to the queue
  * @return Data from first element or NULL if queue is empty
  */
-void *queue_dequeue(Queue *queue) {
+void *queue_dequeue(Queue queue) {
   if (queue == NULL || queue_is_empty(queue)) {
     return NULL;
   }
 
-  QueueNode *node_to_remove = queue->front;
+  struct Queue *q = (struct Queue *)queue;
+  QueueNode *node_to_remove = q->front;
   void *data = node_to_remove->data;
 
-  queue->front = queue->front->next;
+  q->front = q->front->next;
 
   // If queue became empty, update rear as well
-  if (queue->front == NULL) {
-    queue->rear = NULL;
+  if (q->front == NULL) {
+    q->rear = NULL;
   }
 
   free(node_to_remove);
-  queue->size--;
+  q->size--;
 
   return data;
 }
@@ -106,12 +108,13 @@ void *queue_dequeue(Queue *queue) {
  * @param queue Pointer to the queue
  * @return Data from first element or NULL if queue is empty
  */
-void *queue_peek(Queue *queue) {
+void *queue_peek(Queue queue) {
   if (queue == NULL || queue_is_empty(queue)) {
     return NULL;
   }
 
-  return queue->front->data;
+  struct Queue *q = (struct Queue *)queue;
+  return q->front->data;
 }
 
 /**
@@ -119,8 +122,12 @@ void *queue_peek(Queue *queue) {
  * @param queue Pointer to the queue
  * @return true if empty, false otherwise
  */
-bool queue_is_empty(Queue *queue) {
-  return (queue == NULL || queue->front == NULL);
+bool queue_is_empty(Queue queue) {
+  if (queue == NULL) {
+    return true;
+  }
+  struct Queue *q = (struct Queue *)queue;
+  return (q->front == NULL);
 }
 
 /**
@@ -128,19 +135,20 @@ bool queue_is_empty(Queue *queue) {
  * @param queue Pointer to the queue
  * @return Number of elements in the queue
  */
-int queue_size(Queue *queue) {
+int queue_size(Queue queue) {
   if (queue == NULL) {
     return 0;
   }
 
-  return queue->size;
+  struct Queue *q = (struct Queue *)queue;
+  return q->size;
 }
 
 /**
  * Removes all elements from the queue
  * @param queue Pointer to the queue
  */
-void queue_clear(Queue *queue) {
+void queue_clear(Queue queue) {
   if (queue == NULL) {
     return;
   }

@@ -17,8 +17,8 @@ struct Stack {
  * Creates a new empty stack
  * @return Pointer to new stack or NULL on error
  */
-Stack *stack_create(void) {
-  Stack *stack = (Stack *)malloc(sizeof(Stack));
+Stack stack_create(void) {
+  struct Stack *stack = (struct Stack *)malloc(sizeof(struct Stack));
   if (stack == NULL) {
     return NULL;
   }
@@ -26,14 +26,14 @@ Stack *stack_create(void) {
   stack->top = NULL;
   stack->size = 0;
 
-  return stack;
+  return (Stack)stack;
 }
 
 /**
  * Destroys the stack and frees all associated memory
  * @param stack Pointer to stack to be destroyed
  */
-void stack_destroy(Stack *stack) {
+void stack_destroy(Stack stack) {
   if (stack == NULL) {
     return;
   }
@@ -48,20 +48,21 @@ void stack_destroy(Stack *stack) {
  * @param data Data to be added
  * @return true on success, false on error
  */
-bool stack_push(Stack *stack, void *data) {
+bool stack_push(Stack stack, void *data) {
   if (stack == NULL) {
     return false;
   }
 
+  struct Stack *s = (struct Stack *)stack;
   StackNode *new_node = (StackNode *)malloc(sizeof(StackNode));
   if (new_node == NULL) {
     return false;
   }
 
   new_node->data = data;
-  new_node->next = stack->top;
-  stack->top = new_node;
-  stack->size++;
+  new_node->next = s->top;
+  s->top = new_node;
+  s->size++;
 
   return true;
 }
@@ -71,17 +72,18 @@ bool stack_push(Stack *stack, void *data) {
  * @param stack Pointer to the stack
  * @return Data from top element or NULL if stack is empty
  */
-void *stack_pop(Stack *stack) {
+void *stack_pop(Stack stack) {
   if (stack == NULL || stack_is_empty(stack)) {
     return NULL;
   }
 
-  StackNode *node_to_remove = stack->top;
+  struct Stack *s = (struct Stack *)stack;
+  StackNode *node_to_remove = s->top;
   void *data = node_to_remove->data;
 
-  stack->top = stack->top->next;
+  s->top = s->top->next;
   free(node_to_remove);
-  stack->size--;
+  s->size--;
 
   return data;
 }
@@ -91,12 +93,13 @@ void *stack_pop(Stack *stack) {
  * @param stack Pointer to the stack
  * @return Data from top element or NULL if stack is empty
  */
-void *stack_peek(Stack *stack) {
+void *stack_peek(Stack stack) {
   if (stack == NULL || stack_is_empty(stack)) {
     return NULL;
   }
 
-  return stack->top->data;
+  struct Stack *s = (struct Stack *)stack;
+  return s->top->data;
 }
 
 /**
@@ -104,8 +107,12 @@ void *stack_peek(Stack *stack) {
  * @param stack Pointer to the stack
  * @return true if empty, false otherwise
  */
-bool stack_is_empty(Stack *stack) {
-  return (stack == NULL || stack->top == NULL);
+bool stack_is_empty(Stack stack) {
+  if (stack == NULL) {
+    return true;
+  }
+  struct Stack *s = (struct Stack *)stack;
+  return (s->top == NULL);
 }
 
 /**
@@ -113,19 +120,20 @@ bool stack_is_empty(Stack *stack) {
  * @param stack Pointer to the stack
  * @return Number of elements in the stack
  */
-int stack_size(Stack *stack) {
+int stack_size(Stack stack) {
   if (stack == NULL) {
     return 0;
   }
 
-  return stack->size;
+  struct Stack *s = (struct Stack *)stack;
+  return s->size;
 }
 
 /**
  * Removes all elements from the stack
  * @param stack Pointer to the stack
  */
-void stack_clear(Stack *stack) {
+void stack_clear(Stack stack) {
   if (stack == NULL) {
     return;
   }

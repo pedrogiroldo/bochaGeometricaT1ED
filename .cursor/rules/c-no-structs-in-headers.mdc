@@ -1,0 +1,45 @@
+---
+globs: *.h
+description: Proibição de declarações de structs em arquivos .h e uso obrigatório de void*
+---
+
+# Regras para Arquivos de Cabeçalho (.h)
+
+## Proibições:
+
+- **NÃO declare structs em arquivos .h**
+- **NÃO use tipos de struct explícitos em arquivos .h**
+- Use `void*` para todos os ponteiros que referenciam structs
+
+## Padrão Correto:
+
+```c
+// Em arquivo de cabeçalho (.h)
+void* queue_create(void);
+void queue_destroy(void* queue);
+void queue_enqueue(void* queue, void* data);
+void* queue_dequeue(void* queue);
+```
+
+## Padrão Incorreto:
+
+```c
+// NÃO FAÇA ISSO em arquivos .h
+struct Queue {
+    QueueNode *front;
+    QueueNode *rear;
+    int size;
+};
+
+Queue *queue_create(void);
+void queue_destroy(Queue *queue);
+```
+
+## Benefícios:
+
+- Encapsulamento completo da implementação
+- Flexibilidade para mudanças internas sem afetar código cliente
+- Uso consistente de void\* para abstração de tipos
+- Redução do acoplamento entre módulos
+
+Esta abordagem garante que os detalhes de implementação permaneçam completamente ocultos nos arquivos de cabeçalho.
