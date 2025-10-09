@@ -22,6 +22,6 @@ const char *get_file_path(const FileData fileData);
 const char *get_file_name(const FileData fileData);
 
 // Gets the file lines queue
-const Queue get_file_lines_queue(const FileData fileData);
+Queue get_file_lines_queue(const FileData fileData);
 
 #endif // FILE_READER_H

@@ -71,5 +71,6 @@ void execute_geo_commands(Queue lines) {
     } else {
       printf("Unknown command: %s\n", command);
     }
+    free(line);
   }
 }

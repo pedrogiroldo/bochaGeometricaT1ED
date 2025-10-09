@@ -49,7 +49,7 @@ void file_data_destroy(FileData fileData) {
 }
 
 // Reads the file lines and returns a Queue. This function is private.
-Queue read_file_to_queue(const char *filepath) {
+static Queue read_file_to_queue(const char *filepath) {
   Queue lines = queue_create();
   FILE *file = fopen(filepath, "r");
   if (file == NULL) {
@@ -78,7 +78,7 @@ const char *get_file_name(const FileData fileData) {
 }
 
 // Gets the file lines queue
-const Queue get_file_lines_queue(const FileData fileData) {
+Queue get_file_lines_queue(const FileData fileData) {
   struct FileData *file = (struct FileData *)fileData;
   return file->linesQueue;
 }

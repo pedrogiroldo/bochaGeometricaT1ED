@@ -97,9 +97,6 @@ void *queue_dequeue(Queue queue) {
     q->rear = NULL;
   }
 
-  if (node_to_remove->data != NULL) {
-    free(node_to_remove->data);
-  }
   free(node_to_remove);
   q->size--;
 
