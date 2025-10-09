@@ -9,7 +9,12 @@
 
 typedef void *FileData;
 
-// Creates a new FileData instance and reads the file
+/*
+    Creates a new FileData instance and reads the file
+    @param filepath - The path to the file to be read
+    @return FileData - The FileData instance
+    @return NULL - If the FileData instance could not be created
+*/
 FileData file_data_create(const char *filepath);
 
 // Destroys a FileData instance and frees memory
