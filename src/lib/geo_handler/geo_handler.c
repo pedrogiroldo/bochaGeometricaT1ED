@@ -1,11 +1,12 @@
 #include "geo_handler.h"
 #include "../commons/queue/queue.h"
+#include "../file_reader/file_reader.h"
 #include <stdio.h>
 #include <string.h>
 
-void execute_geo_commands(Queue lines) {
-  while (!queue_is_empty(lines)) {
-    char *line = (char *)queue_dequeue(lines);
+void execute_geo_commands(FileData fileData) {
+  while (!queue_is_empty(get_file_lines_queue(fileData))) {
+    char *line = (char *)queue_dequeue(get_file_lines_queue(fileData));
     char *command = strtok(line, " ");
 
     // Circle command: c i x y r corb corp
@@ -71,6 +72,5 @@ void execute_geo_commands(Queue lines) {
     } else {
       printf("Unknown command: %s\n", command);
     }
-    free(line);
   }
 }

@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  execute_geo_commands(get_file_lines_queue(geo_file));
+  execute_geo_commands(geo_file);
 
   file_data_destroy(geo_file);
 
