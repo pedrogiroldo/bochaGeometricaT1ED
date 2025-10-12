@@ -5,7 +5,7 @@
 #include "../shapes/circle/circle.h"
 #include "../shapes/line/line.h"
 #include "../shapes/rectangle/rectangle.h"
-#include "../shapes/shape.h"
+#include "../shapes/shapes.h"
 #include "../shapes/text/text.h"
 #include "../shapes/text_style/text_style.h"
 #include <stdio.h>
