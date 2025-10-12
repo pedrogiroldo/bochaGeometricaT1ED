@@ -29,9 +29,10 @@ static void execute_line_command(Ground_t *ground);
 static void execute_text_command(Ground_t *ground);
 static void execute_text_style_command(Ground_t *ground);
 static void create_svg_queue(Ground_t *ground, const char *output_path,
-                             FileData fileData);
+                             FileData fileData, const char *command_suffix);
 
-Ground execute_geo_commands(FileData fileData, const char *output_path) {
+Ground execute_geo_commands(FileData fileData, const char *output_path,
+                            const char *command_suffix) {
   Ground_t *ground = malloc(sizeof(Ground_t));
   if (ground == NULL) {
     printf("Error: Failed to allocate memory for Ground\n");
@@ -73,7 +74,7 @@ Ground execute_geo_commands(FileData fileData, const char *output_path) {
       printf("Unknown command: %s\n", command);
     }
   }
-  create_svg_queue(ground, output_path, fileData);
+  create_svg_queue(ground, output_path, fileData, command_suffix);
   return ground;
 }
 
@@ -229,7 +230,7 @@ static void execute_text_style_command(Ground_t *ground) {
 }
 
 static void create_svg_queue(Ground_t *ground, const char *output_path,
-                             FileData fileData) {
+                             FileData fileData, const char *command_suffix) {
   const char *original_file_name = get_file_name(fileData);
   size_t name_len = strlen(original_file_name);
   char *file_name = malloc(name_len + 1);
@@ -239,6 +240,10 @@ static void create_svg_queue(Ground_t *ground, const char *output_path,
   }
   strcpy(file_name, original_file_name);
   strtok(file_name, ".");
+  if (command_suffix != NULL) {
+    strcat(file_name, "-");
+    strcat(file_name, command_suffix);
+  }
 
   // Calculate required buffer size: output_path + "/" + file_name + ".svg" +
   // null terminator
