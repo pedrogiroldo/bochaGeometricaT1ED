@@ -21,7 +21,27 @@ int main(int argc, char *argv[]) {
   if (geo_input_path == NULL || output_path == NULL) {
     printf("Error: -f and -o are required\n");
     exit(1);
-  }
+  }typedef void *Ground;
+
+  /*
+      @param FileData fileData - The file data with .geo file lines
+      @param char* output_path - The path to the output file
+      @param char* command_suffix - The command suffix to add to the output file
+     name
+      @return Ground - The ground with the shapes
+  */
+  Ground execute_geo_commands(FileData fileData, const char *output_path,
+                              const char *command_suffix);
+  
+  /*
+      Destroys the ground and frees the memory,
+      this function should be called after the execution
+      of evereything that uses the ground
+  
+      @param Ground ground - The ground to destroy
+      @return void
+  */
+  void destroy_geo_waste(Ground ground);
 
   FileData geo_file = file_data_create(geo_input_path);
   if (geo_file == NULL) {
