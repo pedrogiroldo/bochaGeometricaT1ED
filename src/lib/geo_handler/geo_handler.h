@@ -3,12 +3,14 @@
 */
 #ifndef GEO_HANDLER_H
 #define GEO_HANDLER_H
-#include "../commons/queue/queue.h"
+#include "../file_reader/file_reader.h"
+
+typedef void* Ground;
 
 /*
-    @param Queue lines - The queue with .geo file lines
-    @return void - No return value
+    @param FileData fileData - The file data with .geo file lines
+    @return Ground - The ground with the shapes
 */
-void execute_geo_commands(Queue lines);
+Ground execute_geo_commands(FileData fileData);
 
 #endif // GEO_HANDLER_H
