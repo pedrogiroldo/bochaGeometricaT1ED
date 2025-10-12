@@ -23,9 +23,10 @@ static void execute_rectangle_command(Ground_t *ground);
 static void execute_line_command(Ground_t *ground);
 static void execute_text_command(Ground_t *ground);
 static void execute_text_style_command(Ground_t *ground);
-static void create_svg_queue(Ground_t *ground);
+static void create_svg_queue(Ground_t *ground, const char *output_path,
+                             FileData fileData);
 
-Ground execute_geo_commands(FileData fileData) {
+Ground execute_geo_commands(FileData fileData, const char *output_path) {
   Ground_t *ground = malloc(sizeof(Ground_t));
   if (ground == NULL) {
     printf("Error: Failed to allocate memory for Ground\n");
@@ -67,7 +68,7 @@ Ground execute_geo_commands(FileData fileData) {
       printf("Unknown command: %s\n", command);
     }
   }
-  create_svg_queue(ground);
+  create_svg_queue(ground, output_path, fileData);
   return ground;
 }
 
@@ -191,11 +192,46 @@ static void execute_text_style_command(Ground_t *ground) {
   queue_enqueue(ground->svgQueue, shape);
 }
 
-static void create_svg_queue(Ground_t *ground) {
-  FILE *file = fopen("output.svg", "w");
+static void create_svg_queue(Ground_t *ground, const char *output_path,
+                             FileData fileData) {
+  const char *original_file_name = get_file_name(fileData);
+  size_t name_len = strlen(original_file_name);
+  char *file_name = malloc(name_len + 1);
+  if (file_name == NULL) {
+    printf("Error: Memory allocation failed for file name\n");
+    return;
+  }
+  strcpy(file_name, original_file_name);
+  strtok(file_name, ".");
+
+  // Calculate required buffer size: output_path + "/" + file_name + ".svg" +
+  // null terminator
+  size_t path_len = strlen(output_path);
+  size_t processed_name_len = strlen(file_name);
+  size_t total_len = path_len + 1 + processed_name_len + 4 +
+                     1; // +1 for "/", +4 for ".svg", +1 for null terminator
+
+  // Use dynamic allocation for safety
+  char *output_path_with_file = malloc(total_len);
+  if (output_path_with_file == NULL) {
+    printf("Error: Memory allocation failed\n");
+    return;
+  }
+
+  // Use snprintf for safe string construction
+  int result = snprintf(output_path_with_file, total_len, "%s/%s.svg",
+                        output_path, file_name);
+  if (result < 0 || (size_t)result >= total_len) {
+    printf("Error: Path construction failed\n");
+    free(output_path_with_file);
+    return;
+  }
+
+  FILE *file = fopen(output_path_with_file, "w");
   if (file == NULL) {
-    printf("Error: Failed to open file\n");
-    exit(1);
+    printf("Error: Failed to open file: %s\n", output_path_with_file);
+    free(output_path_with_file);
+    return;
   }
   fprintf(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
   fprintf(
@@ -251,4 +287,6 @@ static void create_svg_queue(Ground_t *ground) {
   }
   fprintf(file, "</svg>\n");
   fclose(file);
+  free(output_path_with_file);
+  free(file_name);
 }
