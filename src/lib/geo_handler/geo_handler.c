@@ -17,6 +17,11 @@ typedef struct {
   Queue svgQueue;
 } Ground_t;
 
+typedef struct {
+  ShapeType type;
+  void *data;
+} Shape_t;
+
 // private functions defined as static and implemented on the end of the file
 static void execute_circle_command(Ground_t *ground);
 static void execute_rectangle_command(Ground_t *ground);
@@ -70,6 +75,37 @@ Ground execute_geo_commands(FileData fileData, const char *output_path) {
   }
   create_svg_queue(ground, output_path, fileData);
   return ground;
+}
+
+void destroy_geo_waste(Ground ground) {
+  Ground_t *ground_t = (Ground_t *)ground;
+  queue_destroy(ground_t->shapesQueue);
+  queue_destroy(ground_t->svgQueue);
+  while (!stack_is_empty(ground_t->shapesStackToFree)) {
+    Shape_t *shape = stack_pop(ground_t->shapesStackToFree);
+    switch (shape->type) {
+    case CIRCLE:
+      circle_destroy(shape->data);
+      break;
+    case RECTANGLE:
+      rectangle_destroy(shape->data);
+      break;
+    case LINE:
+      line_destroy(shape->data);
+      break;
+    case TEXT:
+      text_destroy(shape->data);
+      break;
+    case TEXT_STYLE:
+      text_style_destroy(shape->data);
+      break;
+    default:
+      break;
+    }
+    free(shape);
+  }
+  stack_destroy(ground_t->shapesStackToFree);
+  free(ground);
 }
 
 /**
