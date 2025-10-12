@@ -7,6 +7,8 @@
 #ifndef CIRCLE_H
 #define CIRCLE_H
 
+typedef void* Circle;
+
 /**
  * Creates a new circle instance
  * @param id Circle identifier
@@ -17,55 +19,55 @@
  * @param fill_color Fill color string
  * @return Pointer to new circle or NULL on error
  */
-void *circle_create(int id, double x, double y, double radius,
+Circle circle_create(int id, double x, double y, double radius,
                     const char *border_color, const char *fill_color);
 
 /**
  * Destroys a circle instance and frees all memory
  * @param circle Circle instance to destroy
  */
-void circle_destroy(void *circle);
+void circle_destroy(Circle circle);
 
 /**
  * Gets the circle identifier
  * @param circle Circle instance
  * @return Circle identifier
  */
-int circle_get_id(void *circle);
+int circle_get_id(Circle circle);
 
 /**
  * Gets the X coordinate of circle center
  * @param circle Circle instance
  * @return X coordinate
  */
-double circle_get_x(void *circle);
+double circle_get_x(Circle circle);
 
 /**
  * Gets the Y coordinate of circle center
  * @param circle Circle instance
  * @return Y coordinate
  */
-double circle_get_y(void *circle);
+double circle_get_y(Circle circle);
 
 /**
  * Gets the circle radius
  * @param circle Circle instance
  * @return Circle radius
  */
-double circle_get_radius(void *circle);
+double circle_get_radius(Circle circle);
 
 /**
  * Gets the border color string
  * @param circle Circle instance
  * @return Border color string (do not free)
  */
-const char *circle_get_border_color(void *circle);
+const char *circle_get_border_color(Circle circle);
 
 /**
  * Gets the fill color string
  * @param circle Circle instance
  * @return Fill color string (do not free)
  */
-const char *circle_get_fill_color(void *circle);
+const char *circle_get_fill_color(Circle circle);
 
 #endif // CIRCLE_H
