@@ -56,8 +56,12 @@ char *get_command_suffix(int argc, char *argv[]) {
 
   // Get the last argument if it exists
   char *suffix = NULL;
-  if (new_argc > 1) {
+  if (new_argc == 2) {
     suffix = argv_copy[new_argc - 1];
+  } else if (new_argc > 2) {
+    printf("Error: More than one suffix\n");
+    free(argv_copy);
+    exit(1);
   }
 
   free(argv_copy);

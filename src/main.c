@@ -6,6 +6,11 @@
 
 int main(int argc, char *argv[]) {
 
+  if (argc > 10) { // program -e path -f .geo -o output -q .qry suffix
+    printf("Error: Too many arguments\n");
+    exit(1);
+  }
+
   // Get arguments
   const char *output_path = get_option_value(argc, argv, "o");
   const char *geo_input_path = get_option_value(argc, argv, "f");
