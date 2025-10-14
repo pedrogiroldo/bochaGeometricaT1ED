@@ -109,6 +109,11 @@ void destroy_geo_waste(Ground ground) {
   free(ground);
 }
 
+Queue get_ground_queue(Ground ground) {
+  Ground_t *ground_t = (Ground_t *)ground;
+  return ground_t->shapesQueue;
+}
+
 /**
 **************************
 * Private functions

@@ -18,6 +18,13 @@ Ground execute_geo_commands(FileData fileData, const char *output_path,
                             const char *command_suffix);
 
 /*
+    Gets the ground queue
+    @param Ground ground - The ground to get the queue from
+    @return Queue - The ground queue
+*/
+Queue get_ground_queue(Ground ground);
+
+/*
     Destroys the ground and frees the memory,
     this function should be called after the execution
     of evereything that uses the ground
