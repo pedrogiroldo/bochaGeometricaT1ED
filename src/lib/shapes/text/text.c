@@ -1,4 +1,5 @@
 #include "text.h"
+#include "../../commons/utils/utils.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,21 +15,6 @@ struct Text {
   char anchor;
   char *text;
 };
-
-/**
- * Helper function to duplicate a string (C99 compliant alternative to strdup)
- */
-static char *duplicate_string(const char *s) {
-  if (!s)
-    return NULL;
-
-  size_t len = strlen(s) + 1;
-  char *dup = malloc(len);
-  if (dup) {
-    strcpy(dup, s);
-  }
-  return dup;
-}
 
 void *text_create(int id, double x, double y, const char *border_color,
                   const char *fill_color, char anchor, const char *text) {

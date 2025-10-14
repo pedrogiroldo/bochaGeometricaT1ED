@@ -1,4 +1,5 @@
 #include "line.h"
+#include "../../commons/utils/utils.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,21 +14,6 @@ struct Line {
   double y2;
   char *color;
 };
-
-/**
- * Helper function to duplicate a string (C99 compliant alternative to strdup)
- */
-static char *duplicate_string(const char *s) {
-  if (!s)
-    return NULL;
-
-  size_t len = strlen(s) + 1;
-  char *dup = malloc(len);
-  if (dup) {
-    strcpy(dup, s);
-  }
-  return dup;
-}
 
 void *line_create(int id, double x1, double y1, double x2, double y2,
                   const char *color) {

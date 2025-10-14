@@ -1,4 +1,5 @@
 #include "text_style.h"
+#include "../../commons/utils/utils.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,21 +11,6 @@ struct TextStyle {
   char font_weight;
   int font_size;
 };
-
-/**
- * Helper function to duplicate a string (C99 compliant alternative to strdup)
- */
-static char *duplicate_string(const char *s) {
-  if (!s)
-    return NULL;
-
-  size_t len = strlen(s) + 1;
-  char *dup = malloc(len);
-  if (dup) {
-    strcpy(dup, s);
-  }
-  return dup;
-}
 
 void *text_style_create(const char *font_family, char font_weight,
                         int font_size) {
