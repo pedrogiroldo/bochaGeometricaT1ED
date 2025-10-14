@@ -1,6 +1,6 @@
 # Makefile atualizado para automatizar OBJETOS e dependências
 PROJ_NAME = ted
-LIBS =
+LIBS = -lm
 # Tenta find primeiro, se falhar usa wildcard
 SRC_FILES := $(shell find src -name "*.c" 2>/dev/null)
 ifeq ($(SRC_FILES),)

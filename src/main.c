@@ -50,6 +50,8 @@ int main(int argc, char *argv[]) {
   }
 
   Ground ground = execute_geo_commands(geo_file, output_path, command_suffix);
+  
+  
 
   file_data_destroy(geo_file);
   destroy_geo_waste(ground);
