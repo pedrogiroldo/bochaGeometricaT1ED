@@ -26,23 +26,37 @@ typedef struct {
 } Shooter_t;
 
 typedef struct {
+  Stack arena;
   Stack stackToFree;
 } Qry_t;
 
 // private functions
-static void execute_pd_command(Shooter_t **shooters, int *shootersCount);
+static void execute_pd_command(Shooter_t **shooters, int *shootersCount,
+                               Stack stackToFree);
 static void execute_lc_command(Loader_t **loaders, int *loadersCount,
-                               Ground ground);
+                               Ground ground, Stack stackToFree);
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Shooter_t **shooters, int *shootersCount);
 static void execute_shft_command(Shooter_t **shooters, int *shootersCount);
 static void execute_dsp_command(Shooter_t **shooters, int *shootersCount);
 static void execute_rjd_command();
 static void execute_calc_command();
-static int find_shooter_by_id(Shooter_t **shooters, int shootersCount, int id);
+static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
+                                    int id);
 
 void execute_qry_commands(FileData fileData, Ground ground,
                           const char *output_path, const char *command_suffix) {
+
+  Qry_t *qry = malloc(sizeof(Qry_t));
+  if (qry == NULL) {
+    printf("Error: Failed to allocate memory for Qry\n");
+    exit(1);
+  }
+  qry->arena = stack_create();
+  qry->stackToFree = stack_create();
+
+  // Add qry to stackToFree for cleanup
+  stack_push(qry->stackToFree, qry);
 
   Shooter_t **shooters = NULL;
   int shootersCount = 0;
@@ -54,9 +68,9 @@ void execute_qry_commands(FileData fileData, Ground ground,
     char *command = strtok(line, " ");
 
     if (strcmp(command, "pd") == 0) {
-      execute_pd_command(shooters, &shootersCount);
+      execute_pd_command(shooters, &shootersCount, qry->stackToFree);
     } else if (strcmp(command, "lc") == 0) {
-      execute_lc_command(loaders, &loadersCount, ground);
+      execute_lc_command(loaders, &loadersCount, ground, qry->stackToFree);
     } else if (strcmp(command, "atch") == 0) {
       execute_atch_command(loaders, &loadersCount, shooters, &shootersCount);
     } else if (strcmp(command, "shft") == 0) {
@@ -64,8 +78,10 @@ void execute_qry_commands(FileData fileData, Ground ground,
     } else if (strcmp(command, "dsp") == 0) {
       execute_dsp_command(fileData, ground);
     } else if (strcmp(command, "rjd") == 0) {
+      // execute_rjd_command(); // TODO: Implement this function
     } else if (strcmp(command, "calc") == 0) {
-      execute_calc_command(fileData, ground);
+      // execute_calc_command(fileData, ground); // TODO: Implement this
+      // function
     } else
       printf("Unknown command: %s\n", command);
   }
@@ -77,7 +93,8 @@ Private functions
 ==========================
 */
 
-static void execute_pd_command(Shooter_t **shooters, int *shootersCount) {
+static void execute_pd_command(Shooter_t **shooters, int *shootersCount,
+                               Stack stackToFree) {
   char *identifier = strtok(NULL, " ");
   char *posX = strtok(NULL, " ");
   char *posY = strtok(NULL, " ");
@@ -89,6 +106,9 @@ static void execute_pd_command(Shooter_t **shooters, int *shootersCount) {
     printf("Error: Failed to allocate memory for Shooters\n");
     exit(1);
   }
+
+  // Add shooters array to stackToFree for cleanup
+  stack_push(stackToFree, *shooters);
   (*shooters)[*shootersCount - 1] = (Shooter_t){.id = atoi(identifier),
                                                 .x = atof(posX),
                                                 .y = atof(posY),
@@ -98,7 +118,7 @@ static void execute_pd_command(Shooter_t **shooters, int *shootersCount) {
 }
 
 static void execute_lc_command(Loader_t **loaders, int *loadersCount,
-                               Ground ground) {
+                               Ground ground, Stack stackToFree) {
   char *identifier = strtok(NULL, " ");
   char *firstXShapes = strtok(NULL, " ");
 
@@ -122,6 +142,9 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
       printf("Error: Failed to allocate memory for Loaders\n");
       exit(1);
     }
+
+    // Add loaders array to stackToFree for cleanup
+    stack_push(stackToFree, *loaders);
     (*loaders)[*loadersCount - 1] = (Loader_t){.id = loaderId, .shapes = NULL};
     existingLoaderIndex = *loadersCount - 1;
   }
@@ -133,6 +156,9 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
       printf("Error: Failed to allocate memory for Loader stack\n");
       exit(1);
     }
+
+    // Add shapes stack to stackToFree for cleanup
+    stack_push(stackToFree, (*loaders)[existingLoaderIndex].shapes);
     *(*loaders)[existingLoaderIndex].shapes = stack_create();
     if (*(*loaders)[existingLoaderIndex].shapes == NULL) {
       printf("Error: Failed to create stack for Loader\n");
@@ -162,7 +188,8 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
   int leftLoaderIdInt = atoi(leftLoaderId);
   int rightLoaderIdInt = atoi(rightLoaderId);
 
-  int shooterIndex = find_shooter_by_id(shooters, *shootersCount, shooterIdInt);
+  int shooterIndex =
+      find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
   if (shooterIndex != -1) {
     // Para cada lado, percorre os loaders até encontrar o id correspondente
     Loader_t *leftLoaderPtr = NULL;
@@ -199,7 +226,8 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   int shooterIdInt = atoi(shooterId);
   int timesPressedInt = atoi(timesPressed);
 
-  int shooterIndex = find_shooter_by_id(shooters, *shootersCount, shooterIdInt);
+  int shooterIndex =
+      find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
   if (shooterIndex == -1) {
     printf("Error: Shooter with ID %d not found\n", shooterIdInt);
     return;
@@ -232,9 +260,28 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   }
 }
 
-static void execute_dsp_command(Shooter_t **shooters, int *shootersCount) {}
+static void execute_dsp_command(Shooter_t **shooters, int *shootersCount) {
+  char *shooterId = strtok(NULL, " ");
+  char *dx = strtok(NULL, " ");
+  char *dy = strtok(NULL, " ");
+  char *annotateDimensions = strtok(NULL, " "); // this can be "v" or "i"
 
-static int find_shooter_by_id(Shooter_t **shooters, int shootersCount, int id) {
+  int shooterIdInt = atoi(shooterId);
+  int dxInt = atoi(dx);
+  int dyInt = atoi(dy);
+
+  int shooterIndex =
+      find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
+  if (shooterIndex == -1) {
+    printf("Error: Shooter with ID %d not found\n", shooterIdInt);
+    return;
+  }
+
+  Shooter_t *shooter = &(*shooters)[shooterIndex];
+}
+
+static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
+                                    int id) {
   for (int i = 0; i < shootersCount; i++) {
     if ((*shooters)[i].id == id) {
       return i;
