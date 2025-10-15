@@ -46,10 +46,18 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
                                Ground ground, Stack stackToFree);
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Shooter_t **shooters, int *shootersCount);
+static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
+                                    int shooterId, const char *direction,
+                                    int times);
+static void perform_shoot_operation(Shooter_t **shooters, int shootersCount,
+                                    int shooterId, double dx, double dy,
+                                    const char *annotate, Stack arena,
+                                    Stack stackToFree);
 static void execute_shft_command(Shooter_t **shooters, int *shootersCount);
 static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
                                 Stack arena, Stack stackToFree);
-static void execute_rjd_command();
+static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
+                                Stack stackToFree, Stack arena);
 static void execute_calc_command();
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
@@ -89,7 +97,8 @@ void execute_qry_commands(FileData fileData, Ground ground,
       execute_dsp_command(shooters, &shootersCount, qry->arena,
                           qry->stackToFree);
     } else if (strcmp(command, "rjd") == 0) {
-      // execute_rjd_command(); // TODO: Implement this function
+      execute_rjd_command(shooters, &shootersCount, qry->stackToFree,
+                          qry->arena);
     } else if (strcmp(command, "calc") == 0) {
       // execute_calc_command(fileData, ground); // TODO: Implement this
       // function
@@ -229,6 +238,50 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
   }
 }
 
+static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
+                                    int shooterId, const char *direction,
+                                    int times) {
+  int shooterIndex =
+      find_shooter_index_by_id(shooters, shootersCount, shooterId);
+  if (shooterIndex == -1) {
+    printf("Error: Shooter with ID %d not found\n", shooterId);
+    return;
+  }
+
+  Shooter_t *shooter = &(*shooters)[shooterIndex];
+
+  for (int i = 0; i < times; i++) {
+    if (strcmp(direction, "e") == 0) {
+      // Check if left loader exists and has shapes
+      if (shooter->leftLoader == NULL ||
+          stack_is_empty(*(shooter->leftLoader->shapes))) {
+        continue; // Skip silently if no shapes available
+      }
+
+      // If shooter has a shape, move it to right loader
+      if (shooter->shootingPosition != NULL && shooter->rightLoader != NULL) {
+        stack_push(*(shooter->rightLoader->shapes), shooter->shootingPosition);
+      }
+
+      shooter->shootingPosition = stack_pop(*(shooter->leftLoader->shapes));
+    }
+    if (strcmp(direction, "d") == 0) {
+      // Check if right loader exists and has shapes
+      if (shooter->rightLoader == NULL ||
+          stack_is_empty(*(shooter->rightLoader->shapes))) {
+        continue; // Skip silently if no shapes available
+      }
+
+      // If shooter has a shape, move it to left loader
+      if (shooter->shootingPosition != NULL && shooter->leftLoader != NULL) {
+        stack_push(*(shooter->leftLoader->shapes), shooter->shootingPosition);
+      }
+
+      shooter->shootingPosition = stack_pop(*(shooter->rightLoader->shapes));
+    }
+  }
+}
+
 static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   char *shooterId = strtok(NULL, " ");
   char *leftOrRightButton = strtok(NULL, " ");
@@ -237,62 +290,30 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   int shooterIdInt = atoi(shooterId);
   int timesPressedInt = atoi(timesPressed);
 
-  int shooterIndex =
-      find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
-  if (shooterIndex == -1) {
-    printf("Error: Shooter with ID %d not found\n", shooterIdInt);
-    return;
-  }
-
-  Shooter_t *shooter = &(*shooters)[shooterIndex];
-
-  for (int i = 0; i < *shootersCount; i++) {
-    if (strcmp(leftOrRightButton, "e") == 0) {
-      bool shooterHasAShape = false;
-      if (shooter->leftLoader != NULL) {
-        shooterHasAShape = true;
-      }
-      if (shooterHasAShape) {
-        stack_push(shooter->rightLoader->shapes, shooter->shootingPosition);
-      }
-
-      shooter->shootingPosition = stack_pop(shooter->leftLoader->shapes);
-    }
-    if (strcmp(leftOrRightButton, "d") == 0) {
-      bool shooterHasAShape = false;
-      if (shooter->rightLoader != NULL) {
-        shooterHasAShape = true;
-      }
-      if (shooterHasAShape) {
-        stack_push(shooter->leftLoader->shapes, shooter->shootingPosition);
-      }
-      shooter->shootingPosition = stack_pop(shooter->rightLoader->shapes);
-    }
-  }
+  perform_shift_operation(shooters, *shootersCount, shooterIdInt,
+                          leftOrRightButton, timesPressedInt);
 }
 
-static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
-                                Stack arena, Stack stackToFree) {
-  char *shooterId = strtok(NULL, " ");
-  char *dx = strtok(NULL, " ");
-  char *dy = strtok(NULL, " ");
-  char *annotateDimensions = strtok(NULL, " "); // this can be "v" or "i"
-
-  int shooterIdInt = atoi(shooterId);
-  double dxDouble = atof(dx);
-  double dyDouble = atof(dy);
-
+static void perform_shoot_operation(Shooter_t **shooters, int shootersCount,
+                                    int shooterId, double dx, double dy,
+                                    const char *annotate, Stack arena,
+                                    Stack stackToFree) {
   int shooterIndex =
-      find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
+      find_shooter_index_by_id(shooters, shootersCount, shooterId);
   if (shooterIndex == -1) {
-    printf("Error: Shooter with ID %d not found\n", shooterIdInt);
+    printf("Error: Shooter with ID %d not found\n", shooterId);
     return;
   }
 
   Shooter_t *shooter = &(*shooters)[shooterIndex];
 
-  double shapeXOnArena = shooter->x + dxDouble;
-  double shapeYOnArena = shooter->y + dyDouble;
+  // Check if shooter has a shape to shoot
+  if (shooter->shootingPosition == NULL) {
+    return; // Skip silently if no shape to shoot
+  }
+
+  double shapeXOnArena = shooter->x + dx;
+  double shapeYOnArena = shooter->y + dy;
 
   Shape_t *shape = (Shape_t *)shooter->shootingPosition;
   ShapeType shapeType = shape->type;
@@ -307,12 +328,81 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
   shapePositionOnArena->shape = shape;
   shapePositionOnArena->x = shapeXOnArena;
   shapePositionOnArena->y = shapeYOnArena;
-  shapePositionOnArena->isAnnotated = strcmp(annotateDimensions, "v") == 0;
+  shapePositionOnArena->isAnnotated = strcmp(annotate, "v") == 0;
   shapePositionOnArena->shooterX = shooter->x;
   shapePositionOnArena->shooterY = shooter->y;
 
+  // Clear shooter shooting position
+  shooter->shootingPosition = NULL;
+
   stack_push(arena, (void *)shapePositionOnArena);
   stack_push(stackToFree, (void *)shapePositionOnArena);
+}
+
+static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
+                                Stack arena, Stack stackToFree) {
+  char *shooterId = strtok(NULL, " ");
+  char *dx = strtok(NULL, " ");
+  char *dy = strtok(NULL, " ");
+  char *annotateDimensions = strtok(NULL, " "); // this can be "v" or "i"
+
+  int shooterIdInt = atoi(shooterId);
+  double dxDouble = atof(dx);
+  double dyDouble = atof(dy);
+
+  perform_shoot_operation(shooters, *shootersCount, shooterIdInt, dxDouble,
+                          dyDouble, annotateDimensions, arena, stackToFree);
+}
+
+static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
+                                Stack stackToFree, Stack arena) {
+  char *shooterId = strtok(NULL, " ");
+  char *leftOrRightButton = strtok(NULL, " ");
+  char *dx = strtok(NULL, " ");
+  char *dy = strtok(NULL, " ");
+  char *incrementX = strtok(NULL, " ");
+  char *incrementY = strtok(NULL, " ");
+
+  int shooterIdInt = atoi(shooterId);
+  double dxDouble = atof(dx);
+  double dyDouble = atof(dy);
+  double incrementXDouble = atof(incrementX);
+  double incrementYDouble = atof(incrementY);
+
+  int shooterIndex =
+      find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
+  if (shooterIndex == -1) {
+    printf("Error: Shooter with ID %d not found\n", shooterIdInt);
+    return;
+  }
+
+  Shooter_t *shooter = &(*shooters)[shooterIndex];
+  Loader_t *loader = NULL;
+  if (strcmp(leftOrRightButton, "e") == 0) {
+    loader = shooter->rightLoader;
+  } else if (strcmp(leftOrRightButton, "d") == 0) {
+    loader = shooter->leftLoader;
+  } else {
+    printf("Error: Invalid button (should be 'e' or 'd')\n");
+    return;
+  }
+
+  if (loader == NULL || loader->shapes == NULL) {
+    printf("Error: Loader not found or shapes stack is NULL\n");
+    return;
+  }
+
+  int times = 1;
+  // Loop until loader is empty
+  while (!stack_is_empty(loader->shapes)) {
+    perform_shift_operation(shooters, *shootersCount, shooterIdInt,
+                            leftOrRightButton, 1);
+    perform_shoot_operation(shooters, *shootersCount, shooterIdInt,
+                            times * incrementXDouble + dxDouble,
+                            times * incrementYDouble + dyDouble, "i", arena,
+                            stackToFree);
+    times++;
+  }
 }
 
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
