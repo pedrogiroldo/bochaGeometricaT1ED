@@ -26,7 +26,7 @@ typedef struct {
 } Shooter_t;
 
 typedef struct {
-  Stack arena;
+  Stack arena; // elements are ShapePositionOnArena_t
   Stack stackToFree;
 } Qry_t;
 
@@ -34,6 +34,9 @@ typedef struct {
   Shape_t *shape;
   double x;
   double y;
+  bool isAnnotated;
+  double shooterX;
+  double shooterY;
 } ShapePositionOnArena_t;
 
 // private functions
@@ -45,7 +48,7 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Shooter_t **shooters, int *shootersCount);
 static void execute_shft_command(Shooter_t **shooters, int *shootersCount);
 static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
-                                Stack arena);
+                                Stack arena, Stack stackToFree);
 static void execute_rjd_command();
 static void execute_calc_command();
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
@@ -83,7 +86,8 @@ void execute_qry_commands(FileData fileData, Ground ground,
     } else if (strcmp(command, "shft") == 0) {
       execute_shft_command(fileData, ground);
     } else if (strcmp(command, "dsp") == 0) {
-      execute_dsp_command(shooters, &shootersCount, qry->arena);
+      execute_dsp_command(shooters, &shootersCount, qry->arena,
+                          qry->stackToFree);
     } else if (strcmp(command, "rjd") == 0) {
       // execute_rjd_command(); // TODO: Implement this function
     } else if (strcmp(command, "calc") == 0) {
@@ -268,7 +272,7 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
 }
 
 static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
-                                Stack arena) {
+                                Stack arena, Stack stackToFree) {
   char *shooterId = strtok(NULL, " ");
   char *dx = strtok(NULL, " ");
   char *dy = strtok(NULL, " ");
@@ -303,8 +307,12 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
   shapePositionOnArena->shape = shape;
   shapePositionOnArena->x = shapeXOnArena;
   shapePositionOnArena->y = shapeYOnArena;
+  shapePositionOnArena->isAnnotated = strcmp(annotateDimensions, "v") == 0;
+  shapePositionOnArena->shooterX = shooter->x;
+  shapePositionOnArena->shooterY = shooter->y;
 
   stack_push(arena, (void *)shapePositionOnArena);
+  stack_push(stackToFree, (void *)shapePositionOnArena);
 }
 
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
