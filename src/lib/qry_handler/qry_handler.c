@@ -58,7 +58,7 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
                                 Stack arena, Stack stackToFree);
 static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
                                 Stack stackToFree, Stack arena);
-static void execute_calc_command();
+static void execute_calc_command(Stack arena);
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
 
@@ -100,8 +100,7 @@ void execute_qry_commands(FileData fileData, Ground ground,
       execute_rjd_command(shooters, &shootersCount, qry->stackToFree,
                           qry->arena);
     } else if (strcmp(command, "calc") == 0) {
-      // execute_calc_command(fileData, ground); // TODO: Implement this
-      // function
+      execute_calc_command(qry->arena);
     } else
       printf("Unknown command: %s\n", command);
   }
@@ -393,6 +392,7 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
   }
 
   int times = 1;
+
   // Loop until loader is empty
   while (!stack_is_empty(loader->shapes)) {
     perform_shift_operation(shooters, *shootersCount, shooterIdInt,
@@ -402,6 +402,27 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
                             times * incrementYDouble + dyDouble, "i", arena,
                             stackToFree);
     times++;
+  }
+}
+
+void execute_calc_command(Stack arena) {
+
+  FILE *svgFile = fopen("output.svg", "w");
+  if (svgFile == NULL) {
+    printf("Error: Failed to open output.svg\n");
+    exit(1);
+  }
+  fprintf(svgFile, "<svg width=\"100%%\" height=\"100%%\" viewBox=\"0 0 100 "
+                   "100\" xmlns=\"http://www.w3.org/2000/svg\">\n");
+
+  ShapePositionOnArena_t *lastShapePositionOnArena = NULL;
+
+  while (!stack_is_empty(arena)) {
+    ShapePositionOnArena_t *shapePositionOnArena =
+        (ShapePositionOnArena_t *)stack_pop(arena);
+    if (lastShapePositionOnArena != NULL) {
+      
+    }
   }
 }
 
