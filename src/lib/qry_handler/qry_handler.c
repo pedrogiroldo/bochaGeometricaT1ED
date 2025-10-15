@@ -20,7 +20,7 @@ typedef struct {
   int id;
   double x;
   double y;
-  Shape_t *shooterShape;
+  Shape_t *shootingPosition;
   Loader_t *rightLoader;
   Loader_t *leftLoader;
 } Shooter_t;
@@ -36,9 +36,10 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Shooter_t **shooters, int *shootersCount);
 static void execute_shft_command(Shooter_t **shooters, int *shootersCount);
-static void execute_dsp_command();
+static void execute_dsp_command(Shooter_t **shooters, int *shootersCount);
 static void execute_rjd_command();
 static void execute_calc_command();
+static int find_shooter_by_id(Shooter_t **shooters, int shootersCount, int id);
 
 void execute_qry_commands(FileData fileData, Ground ground,
                           const char *output_path, const char *command_suffix) {
@@ -91,7 +92,7 @@ static void execute_pd_command(Shooter_t **shooters, int *shootersCount) {
   (*shooters)[*shootersCount - 1] = (Shooter_t){.id = atoi(identifier),
                                                 .x = atof(posX),
                                                 .y = atof(posY),
-                                                .shooterShape = NULL,
+                                                .shootingPosition = NULL,
                                                 .rightLoader = NULL,
                                                 .leftLoader = NULL};
 }
@@ -161,33 +162,32 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
   int leftLoaderIdInt = atoi(leftLoaderId);
   int rightLoaderIdInt = atoi(rightLoaderId);
 
-  for (int i = 0; i < *shootersCount; i++) {
-    if ((*shooters)[i].id == shooterIdInt) {
-
-      // Para cada lado, percorre os loaders até encontrar o id correspondente
-      Loader_t *leftLoaderPtr = NULL;
-      Loader_t *rightLoaderPtr = NULL;
-      for (int j = 0; j < *loadersCount; j++) {
-        if ((*loaders)[j].id == leftLoaderIdInt) {
-          leftLoaderPtr = &(*loaders)[j];
-        }
-        if ((*loaders)[j].id == rightLoaderIdInt) {
-          rightLoaderPtr = &(*loaders)[j];
-        }
+  int shooterIndex = find_shooter_by_id(shooters, *shootersCount, shooterIdInt);
+  if (shooterIndex != -1) {
+    // Para cada lado, percorre os loaders até encontrar o id correspondente
+    Loader_t *leftLoaderPtr = NULL;
+    Loader_t *rightLoaderPtr = NULL;
+    for (int j = 0; j < *loadersCount; j++) {
+      if ((*loaders)[j].id == leftLoaderIdInt) {
+        leftLoaderPtr = &(*loaders)[j];
       }
-
-      // Verifica se os loaders foram encontrados
-      if (leftLoaderPtr == NULL) {
-        printf("Error: Loader with ID %d not found\n", leftLoaderIdInt);
+      if ((*loaders)[j].id == rightLoaderIdInt) {
+        rightLoaderPtr = &(*loaders)[j];
       }
-      if (rightLoaderPtr == NULL) {
-        printf("Error: Loader with ID %d not found\n", rightLoaderIdInt);
-      }
-
-      (*shooters)[i].leftLoader = leftLoaderPtr;
-      (*shooters)[i].rightLoader = rightLoaderPtr;
-      break;
     }
+
+    // Verifica se os loaders foram encontrados
+    if (leftLoaderPtr == NULL) {
+      printf("Error: Loader with ID %d not found\n", leftLoaderIdInt);
+    }
+    if (rightLoaderPtr == NULL) {
+      printf("Error: Loader with ID %d not found\n", rightLoaderIdInt);
+    }
+
+    (*shooters)[shooterIndex].leftLoader = leftLoaderPtr;
+    (*shooters)[shooterIndex].rightLoader = rightLoaderPtr;
+  } else {
+    printf("Error: Shooter with ID %d not found\n", shooterIdInt);
   }
 }
 
@@ -199,13 +199,7 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   int shooterIdInt = atoi(shooterId);
   int timesPressedInt = atoi(timesPressed);
 
-  int shooterIndex = -1;
-  for (int i = 0; i < *shootersCount; i++) {
-    if ((*shooters)[i].id == shooterIdInt) {
-      shooterIndex = i;
-      break;
-    }
-  }
+  int shooterIndex = find_shooter_by_id(shooters, *shootersCount, shooterIdInt);
   if (shooterIndex == -1) {
     printf("Error: Shooter with ID %d not found\n", shooterIdInt);
     return;
@@ -220,10 +214,10 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
         shooterHasAShape = true;
       }
       if (shooterHasAShape) {
-        stack_push(shooter->rightLoader->shapes, shooter->shooterShape);
+        stack_push(shooter->rightLoader->shapes, shooter->shootingPosition);
       }
 
-      shooter->shooterShape = stack_pop(shooter->leftLoader->shapes);
+      shooter->shootingPosition = stack_pop(shooter->leftLoader->shapes);
     }
     if (strcmp(leftOrRightButton, "d") == 0) {
       bool shooterHasAShape = false;
@@ -231,9 +225,20 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
         shooterHasAShape = true;
       }
       if (shooterHasAShape) {
-        stack_push(shooter->leftLoader->shapes, shooter->shooterShape);
+        stack_push(shooter->leftLoader->shapes, shooter->shootingPosition);
       }
-      shooter->shooterShape = stack_pop(shooter->rightLoader->shapes);
+      shooter->shootingPosition = stack_pop(shooter->rightLoader->shapes);
     }
   }
+}
+
+static void execute_dsp_command(Shooter_t **shooters, int *shootersCount) {}
+
+static int find_shooter_by_id(Shooter_t **shooters, int shootersCount, int id) {
+  for (int i = 0; i < shootersCount; i++) {
+    if ((*shooters)[i].id == id) {
+      return i;
+    }
+  }
+  return -1;
 }
