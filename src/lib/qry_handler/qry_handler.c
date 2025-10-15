@@ -30,6 +30,12 @@ typedef struct {
   Stack stackToFree;
 } Qry_t;
 
+typedef struct {
+  Shape_t *shape;
+  double x;
+  double y;
+} ShapePositionOnArena_t;
+
 // private functions
 static void execute_pd_command(Shooter_t **shooters, int *shootersCount,
                                Stack stackToFree);
@@ -38,7 +44,8 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Shooter_t **shooters, int *shootersCount);
 static void execute_shft_command(Shooter_t **shooters, int *shootersCount);
-static void execute_dsp_command(Shooter_t **shooters, int *shootersCount);
+static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
+                                Stack arena);
 static void execute_rjd_command();
 static void execute_calc_command();
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
@@ -76,7 +83,7 @@ void execute_qry_commands(FileData fileData, Ground ground,
     } else if (strcmp(command, "shft") == 0) {
       execute_shft_command(fileData, ground);
     } else if (strcmp(command, "dsp") == 0) {
-      execute_dsp_command(fileData, ground);
+      execute_dsp_command(shooters, &shootersCount, qry->arena);
     } else if (strcmp(command, "rjd") == 0) {
       // execute_rjd_command(); // TODO: Implement this function
     } else if (strcmp(command, "calc") == 0) {
@@ -260,15 +267,16 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   }
 }
 
-static void execute_dsp_command(Shooter_t **shooters, int *shootersCount) {
+static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
+                                Stack arena) {
   char *shooterId = strtok(NULL, " ");
   char *dx = strtok(NULL, " ");
   char *dy = strtok(NULL, " ");
   char *annotateDimensions = strtok(NULL, " "); // this can be "v" or "i"
 
   int shooterIdInt = atoi(shooterId);
-  int dxInt = atoi(dx);
-  int dyInt = atoi(dy);
+  double dxDouble = atof(dx);
+  double dyDouble = atof(dy);
 
   int shooterIndex =
       find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
@@ -278,6 +286,25 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount) {
   }
 
   Shooter_t *shooter = &(*shooters)[shooterIndex];
+
+  double shapeXOnArena = shooter->x + dxDouble;
+  double shapeYOnArena = shooter->y + dyDouble;
+
+  Shape_t *shape = (Shape_t *)shooter->shootingPosition;
+  ShapeType shapeType = shape->type;
+
+  // Add shape to arena
+  ShapePositionOnArena_t *shapePositionOnArena =
+      malloc(sizeof(ShapePositionOnArena_t));
+  if (shapePositionOnArena == NULL) {
+    printf("Error: Failed to allocate memory for ShapePositionOnArena\n");
+    exit(1);
+  }
+  shapePositionOnArena->shape = shape;
+  shapePositionOnArena->x = shapeXOnArena;
+  shapePositionOnArena->y = shapeYOnArena;
+
+  stack_push(arena, (void *)shapePositionOnArena);
 }
 
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
