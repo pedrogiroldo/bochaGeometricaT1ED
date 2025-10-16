@@ -874,60 +874,6 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
   }
   queue_destroy(tempQueue);
 
-  // Render shapes from arena at shot coordinates (without destroying the stack)
-  Stack tempStackShapes = stack_create();
-  while (!stack_is_empty(arena)) {
-    ShapePositionOnArena_t *s = (ShapePositionOnArena_t *)stack_pop(arena);
-    if (s != NULL && s->shape != NULL) {
-      if (s->shape->type == CIRCLE) {
-        Circle circle = (Circle)s->shape->data;
-        fprintf(
-            file,
-            "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s'/>\n",
-            s->x, s->y, circle_get_radius(circle),
-            circle_get_fill_color(circle), circle_get_border_color(circle));
-      } else if (s->shape->type == RECTANGLE) {
-        Rectangle rectangle = (Rectangle)s->shape->data;
-        fprintf(file,
-                "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s' "
-                "stroke='%s'/>\n",
-                s->x, s->y, rectangle_get_width(rectangle),
-                rectangle_get_height(rectangle),
-                rectangle_get_fill_color(rectangle),
-                rectangle_get_border_color(rectangle));
-      } else if (s->shape->type == LINE) {
-        Line line = (Line)s->shape->data;
-        double dx = line_get_x2(line) - line_get_x1(line);
-        double dy = line_get_y2(line) - line_get_y1(line);
-        fprintf(file,
-                "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='%s'/>\n",
-                s->x, s->y, s->x + dx, s->y + dy, line_get_color(line));
-      } else if (s->shape->type == TEXT) {
-        Text text = (Text)s->shape->data;
-        char anchor = text_get_anchor(text);
-        const char *text_anchor = "start"; // default
-        if (anchor == 'm' || anchor == 'M') {
-          text_anchor = "middle";
-        } else if (anchor == 'e' || anchor == 'E') {
-          text_anchor = "end";
-        } else if (anchor == 's' || anchor == 'S') {
-          text_anchor = "start";
-        }
-        fprintf(file,
-                "<text x='%.2f' y='%.2f' fill='%s' stroke='%s' "
-                "text-anchor='%s'>%s</text>\n",
-                s->x, s->y, text_get_fill_color(text),
-                text_get_border_color(text), text_anchor, text_get_text(text));
-      }
-    }
-    stack_push(tempStackShapes, s);
-  }
-  // restore arena stack (original order)
-  while (!stack_is_empty(tempStackShapes)) {
-    stack_push(arena, stack_pop(tempStackShapes));
-  }
-  stack_destroy(tempStackShapes);
-
   // Render annotations from arena without destroying the stack
   Stack tempStack = stack_create();
   while (!stack_is_empty(arena)) {
