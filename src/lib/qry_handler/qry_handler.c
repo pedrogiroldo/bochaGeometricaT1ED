@@ -51,7 +51,8 @@ static void execute_pd_command(Shooter_t **shooters, int *shootersCount,
 static void execute_lc_command(Loader_t **loaders, int *loadersCount,
                                Ground ground, Stack stackToFree);
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
-                                 Shooter_t **shooters, int *shootersCount);
+                                 Shooter_t **shooters, int *shootersCount,
+                                 Stack stackToFree);
 static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
                                     int shooterId, const char *direction,
                                     int times);
@@ -84,6 +85,14 @@ static Shape_t *make_shape_wrapper(ShapeType type, void *data);
 static Shape_t *clone_with_border_color(Shape_t *src,
                                         const char *newBorderColor);
 static Shape_t *clone_with_swapped_colors(Shape_t *src);
+// Clone helpers setting a new position (x,y) based on arena placement
+static Shape_t *clone_with_position(Shape_t *src, double x, double y);
+static Shape_t *clone_with_border_color_at_position(Shape_t *src,
+                                                    const char *newBorderColor,
+                                                    double x, double y);
+static Shape_t *clone_with_swapped_colors_at_position(Shape_t *src, double x,
+                                                      double y);
+static void destroy_shape(Shape_t *s);
 
 // SVG writer for final .qry result
 static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
@@ -122,7 +131,8 @@ void execute_qry_commands(FileData qryFileData, FileData geoFileData,
     } else if (strcmp(command, "lc") == 0) {
       execute_lc_command(&loaders, &loadersCount, ground, qry->stackToFree);
     } else if (strcmp(command, "atch") == 0) {
-      execute_atch_command(&loaders, &loadersCount, &shooters, &shootersCount);
+      execute_atch_command(&loaders, &loadersCount, &shooters, &shootersCount,
+                           qry->stackToFree);
     } else if (strcmp(command, "shft") == 0) {
       execute_shft_command(&shooters, &shootersCount);
     } else if (strcmp(command, "dsp") == 0) {
@@ -235,7 +245,8 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
 }
 
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
-                                 Shooter_t **shooters, int *shootersCount) {
+                                 Shooter_t **shooters, int *shootersCount,
+                                 Stack stackToFree) {
   char *shooterId = strtok(NULL, " ");
   char *leftLoaderId = strtok(NULL, " ");
   char *rightLoaderId = strtok(NULL, " ");
@@ -247,7 +258,7 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
   int shooterIndex =
       find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
   if (shooterIndex != -1) {
-    // Para cada lado, percorre os loaders até encontrar o id correspondente
+    // Find left and right loaders by id; create empty ones if not found
     Loader_t *leftLoaderPtr = NULL;
     Loader_t *rightLoaderPtr = NULL;
     for (int j = 0; j < *loadersCount; j++) {
@@ -259,12 +270,58 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
       }
     }
 
-    // Verifica se os loaders foram encontrados
+    // Create left loader if it does not exist
     if (leftLoaderPtr == NULL) {
-      printf("Error: Loader with ID %d not found\n", leftLoaderIdInt);
+      *loadersCount += 1;
+      *loaders = realloc(*loaders, *loadersCount * sizeof(Loader_t));
+      if (*loaders == NULL) {
+        printf("Error: Failed to allocate memory for Loaders\n");
+        exit(1);
+      }
+      // Track the (re)allocated loaders array for later cleanup
+      stack_push(stackToFree, *loaders);
+      (*loaders)[*loadersCount - 1] =
+          (Loader_t){.id = leftLoaderIdInt, .shapes = NULL};
+      // Create empty shapes stack for the new loader
+      (*loaders)[*loadersCount - 1].shapes = malloc(sizeof(Stack));
+      if ((*loaders)[*loadersCount - 1].shapes == NULL) {
+        printf("Error: Failed to allocate memory for Loader stack\n");
+        exit(1);
+      }
+      stack_push(stackToFree, (*loaders)[*loadersCount - 1].shapes);
+      *(*loaders)[*loadersCount - 1].shapes = stack_create();
+      if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
+        printf("Error: Failed to create stack for Loader\n");
+        exit(1);
+      }
+      leftLoaderPtr = &(*loaders)[*loadersCount - 1];
     }
+
+    // Create right loader if it does not exist
     if (rightLoaderPtr == NULL) {
-      printf("Error: Loader with ID %d not found\n", rightLoaderIdInt);
+      *loadersCount += 1;
+      *loaders = realloc(*loaders, *loadersCount * sizeof(Loader_t));
+      if (*loaders == NULL) {
+        printf("Error: Failed to allocate memory for Loaders\n");
+        exit(1);
+      }
+      // Track the (re)allocated loaders array for later cleanup
+      stack_push(stackToFree, *loaders);
+      (*loaders)[*loadersCount - 1] =
+          (Loader_t){.id = rightLoaderIdInt, .shapes = NULL};
+      // Create empty shapes stack for the new loader
+      (*loaders)[*loadersCount - 1].shapes = malloc(sizeof(Stack));
+      if ((*loaders)[*loadersCount - 1].shapes == NULL) {
+        printf("Error: Failed to allocate memory for Loader stack\n");
+        exit(1);
+      }
+      stack_push(stackToFree, (*loaders)[*loadersCount - 1].shapes);
+      *(*loaders)[*loadersCount - 1].shapes = stack_create();
+      if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
+        printf("Error: Failed to create stack for Loader\n");
+        exit(1);
+      }
+      rightLoaderPtr = &(*loaders)[*loadersCount - 1];
     }
 
     (*shooters)[shooterIndex].leftLoader = leftLoaderPtr;
@@ -465,8 +522,11 @@ void execute_calc_command(Stack arena, Ground ground) {
   while (!stack_is_empty(temp)) {
     ShapePositionOnArena_t *I = (ShapePositionOnArena_t *)stack_pop(temp);
     if (stack_is_empty(temp)) {
-      // No pair for I, just return to ground in original form
-      queue_enqueue(get_ground_queue(ground), I->shape);
+      // No pair for I, return to ground at its arena position
+      Shape_t *Ipos = clone_with_position(I->shape, I->x, I->y);
+      if (Ipos != NULL) {
+        queue_enqueue(get_ground_queue(ground), Ipos);
+      }
       continue;
     }
     ShapePositionOnArena_t *J = (ShapePositionOnArena_t *)stack_pop(temp);
@@ -477,8 +537,11 @@ void execute_calc_command(Stack arena, Ground ground) {
       double areaJ = shape_area(J->shape->type, J->shape->data);
 
       if (areaI < areaJ) {
-        // I is destroyed; J goes back to ground
-        queue_enqueue(get_ground_queue(ground), J->shape);
+        // I is destroyed; J goes back to ground at its arena position
+        Shape_t *Jpos = clone_with_position(J->shape, J->x, J->y);
+        if (Jpos != NULL) {
+          queue_enqueue(get_ground_queue(ground), Jpos);
+        }
       } else if (areaI > areaJ) {
         // I changes border color of J to fill color of I, if applicable
         const char *fillColorI = NULL;
@@ -498,29 +561,53 @@ void execute_calc_command(Stack arena, Ground ground) {
           break;
         }
 
-        Shape_t *Jprime = J->shape;
+        // Prepare J' with new border and positioned at J
+        Shape_t *JprimePos = NULL;
         if (fillColorI != NULL) {
-          Jprime = clone_with_border_color(J->shape, fillColorI);
+          JprimePos = clone_with_border_color_at_position(J->shape, fillColorI,
+                                                          J->x, J->y);
+        } else {
+          JprimePos = clone_with_position(J->shape, J->x, J->y);
         }
 
-        // Both return to ground in original relative order (I, then J')
-        queue_enqueue(get_ground_queue(ground), I->shape);
-        queue_enqueue(get_ground_queue(ground), Jprime);
+        // Both return to ground in original relative order (I, then J') at
+        // their positions
+        Shape_t *Ipos = clone_with_position(I->shape, I->x, I->y);
+        if (Ipos != NULL) {
+          queue_enqueue(get_ground_queue(ground), Ipos);
+        }
+        if (JprimePos != NULL) {
+          queue_enqueue(get_ground_queue(ground), JprimePos);
+        }
 
-        // Clone I swapping border and fill (only if applicable)
-        Shape_t *Iclone = clone_with_swapped_colors(I->shape);
-        if (Iclone != NULL) {
-          queue_enqueue(get_ground_queue(ground), Iclone);
+        // Clone I swapping border and fill (only if applicable), at I position
+        Shape_t *IclonePos =
+            clone_with_swapped_colors_at_position(I->shape, I->x, I->y);
+        if (IclonePos != NULL) {
+          queue_enqueue(get_ground_queue(ground), IclonePos);
         }
       } else {
-        // Equal areas: both return unchanged
-        queue_enqueue(get_ground_queue(ground), I->shape);
-        queue_enqueue(get_ground_queue(ground), J->shape);
+        // Equal areas: both return unchanged at their positions
+        Shape_t *Ipos = clone_with_position(I->shape, I->x, I->y);
+        Shape_t *Jpos = clone_with_position(J->shape, J->x, J->y);
+        if (Ipos != NULL) {
+          queue_enqueue(get_ground_queue(ground), Ipos);
+        }
+        if (Jpos != NULL) {
+          queue_enqueue(get_ground_queue(ground), Jpos);
+        }
       }
     } else {
-      // No overlap: both return unchanged in the same relative order
-      queue_enqueue(get_ground_queue(ground), I->shape);
-      queue_enqueue(get_ground_queue(ground), J->shape);
+      // No overlap: both return unchanged in the same relative order, placed at
+      // their positions
+      Shape_t *Ipos = clone_with_position(I->shape, I->x, I->y);
+      Shape_t *Jpos = clone_with_position(J->shape, J->x, J->y);
+      if (Ipos != NULL) {
+        queue_enqueue(get_ground_queue(ground), Ipos);
+      }
+      if (Jpos != NULL) {
+        queue_enqueue(get_ground_queue(ground), Jpos);
+      }
     }
   }
 }
@@ -760,6 +847,167 @@ static Shape_t *clone_with_swapped_colors(Shape_t *src) {
 }
 
 // =====================
+// Positioning helpers
+// =====================
+
+static void destroy_shape(Shape_t *s) {
+  if (s == NULL)
+    return;
+  switch (s->type) {
+  case CIRCLE:
+    circle_destroy((Circle)s->data);
+    break;
+  case RECTANGLE:
+    rectangle_destroy((Rectangle)s->data);
+    break;
+  case LINE:
+    line_destroy((Line)s->data);
+    break;
+  case TEXT:
+    text_destroy((Text)s->data);
+    break;
+  case TEXT_STYLE:
+    // nothing allocated
+    break;
+  }
+  free(s);
+}
+
+static Shape_t *clone_with_position(Shape_t *src, double x, double y) {
+  if (src == NULL)
+    return NULL;
+  switch (src->type) {
+  case CIRCLE: {
+    Circle c = (Circle)src->data;
+    int id = circle_get_id(c);
+    double r = circle_get_radius(c);
+    const char *border = circle_get_border_color(c);
+    const char *fill = circle_get_fill_color(c);
+    Circle nc = circle_create(id, x, y, r, border, fill);
+    return make_shape_wrapper(CIRCLE, nc);
+  }
+  case RECTANGLE: {
+    Rectangle r = (Rectangle)src->data;
+    int id = rectangle_get_id(r);
+    double w = rectangle_get_width(r);
+    double h = rectangle_get_height(r);
+    const char *border = rectangle_get_border_color(r);
+    const char *fill = rectangle_get_fill_color(r);
+    Rectangle nr = rectangle_create(id, x, y, w, h, border, fill);
+    return make_shape_wrapper(RECTANGLE, nr);
+  }
+  case TEXT: {
+    Text t = (Text)src->data;
+    int id = text_get_id(t);
+    const char *border = text_get_border_color(t);
+    const char *fill = text_get_fill_color(t);
+    char anchor = text_get_anchor(t);
+    const char *txt = text_get_text(t);
+    Text nt = text_create(id, x, y, border, fill, anchor, txt);
+    return make_shape_wrapper(TEXT, nt);
+  }
+  case LINE: {
+    Line l = (Line)src->data;
+    int id = line_get_id(l);
+    double dx = line_get_x2(l) - line_get_x1(l);
+    double dy = line_get_y2(l) - line_get_y1(l);
+    Line nl = line_create(id, x, y, x + dx, y + dy, line_get_color(l));
+    return make_shape_wrapper(LINE, nl);
+  }
+  case TEXT_STYLE:
+    return NULL;
+  }
+  return NULL;
+}
+
+static Shape_t *clone_with_border_color_at_position(Shape_t *src,
+                                                    const char *newBorderColor,
+                                                    double x, double y) {
+  if (src == NULL)
+    return NULL;
+  switch (src->type) {
+  case CIRCLE: {
+    Circle c = (Circle)src->data;
+    int id = circle_get_id(c);
+    double r = circle_get_radius(c);
+    const char *fill = circle_get_fill_color(c);
+    Circle nc = circle_create(id, x, y, r, newBorderColor, fill);
+    return make_shape_wrapper(CIRCLE, nc);
+  }
+  case RECTANGLE: {
+    Rectangle r = (Rectangle)src->data;
+    int id = rectangle_get_id(r);
+    double w = rectangle_get_width(r);
+    double h = rectangle_get_height(r);
+    const char *fill = rectangle_get_fill_color(r);
+    Rectangle nr = rectangle_create(id, x, y, w, h, newBorderColor, fill);
+    return make_shape_wrapper(RECTANGLE, nr);
+  }
+  case TEXT: {
+    Text t = (Text)src->data;
+    int id = text_get_id(t);
+    const char *fill = text_get_fill_color(t);
+    char anchor = text_get_anchor(t);
+    const char *txt = text_get_text(t);
+    Text nt = text_create(id, x, y, newBorderColor, fill, anchor, txt);
+    return make_shape_wrapper(TEXT, nt);
+  }
+  case LINE: {
+    Line l = (Line)src->data;
+    int id = line_get_id(l);
+    double dx = line_get_x2(l) - line_get_x1(l);
+    double dy = line_get_y2(l) - line_get_y1(l);
+    Line nl = line_create(id, x, y, x + dx, y + dy, newBorderColor);
+    return make_shape_wrapper(LINE, nl);
+  }
+  case TEXT_STYLE:
+    return NULL;
+  }
+  return NULL;
+}
+
+static Shape_t *clone_with_swapped_colors_at_position(Shape_t *src, double x,
+                                                      double y) {
+  if (src == NULL)
+    return NULL;
+  switch (src->type) {
+  case CIRCLE: {
+    Circle c = (Circle)src->data;
+    int id = circle_get_id(c);
+    double r = circle_get_radius(c);
+    const char *border = circle_get_border_color(c);
+    const char *fill = circle_get_fill_color(c);
+    Circle nc = circle_create(id, x, y, r, fill, border);
+    return make_shape_wrapper(CIRCLE, nc);
+  }
+  case RECTANGLE: {
+    Rectangle r = (Rectangle)src->data;
+    int id = rectangle_get_id(r);
+    double w = rectangle_get_width(r);
+    double h = rectangle_get_height(r);
+    const char *border = rectangle_get_border_color(r);
+    const char *fill = rectangle_get_fill_color(r);
+    Rectangle nr = rectangle_create(id, x, y, w, h, fill, border);
+    return make_shape_wrapper(RECTANGLE, nr);
+  }
+  case TEXT: {
+    Text t = (Text)src->data;
+    int id = text_get_id(t);
+    const char *border = text_get_border_color(t);
+    const char *fill = text_get_fill_color(t);
+    char anchor = text_get_anchor(t);
+    const char *txt = text_get_text(t);
+    Text nt = text_create(id, x, y, fill, border, anchor, txt);
+    return make_shape_wrapper(TEXT, nt);
+  }
+  case LINE:
+  case TEXT_STYLE:
+    return NULL;
+  }
+  return NULL;
+}
+
+// =====================
 // SVG writer implementation
 // =====================
 static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
@@ -815,9 +1063,8 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
   }
 
   fprintf(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-  fprintf(
-      file,
-      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1000 1000\">\n");
+  fprintf(file, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10000 "
+                "10000\">\n");
 
   // Render remaining shapes from Ground without destroying the queue
   Queue groundQueue = get_ground_queue(ground);
