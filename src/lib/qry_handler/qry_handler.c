@@ -29,6 +29,9 @@ typedef struct {
   Shape_t *shootingPosition;
   Loader_t *rightLoader;
   Loader_t *leftLoader;
+  int rightLoaderId; // stable identifier, avoids dangling pointers after
+                     // realloc
+  int leftLoaderId; // stable identifier, avoids dangling pointers after realloc
 } Shooter_t;
 
 typedef struct {
@@ -55,16 +58,19 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Stack stackToFree);
 static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
                                     int shooterId, const char *direction,
-                                    int times);
+                                    int times, Loader_t *loaders,
+                                    int loadersCount);
 static void perform_shoot_operation(Shooter_t **shooters, int shootersCount,
                                     int shooterId, double dx, double dy,
                                     const char *annotate, Stack arena,
                                     Stack stackToFree);
-static void execute_shft_command(Shooter_t **shooters, int *shootersCount);
+static void execute_shft_command(Shooter_t **shooters, int *shootersCount,
+                                 Loader_t *loaders, int *loadersCount);
 static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
                                 Stack arena, Stack stackToFree);
 static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
-                                Stack stackToFree, Stack arena);
+                                Stack stackToFree, Stack arena,
+                                Loader_t *loaders, int *loadersCount);
 static void execute_calc_command(Stack arena, Ground ground);
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
@@ -134,13 +140,13 @@ void execute_qry_commands(FileData qryFileData, FileData geoFileData,
       execute_atch_command(&loaders, &loadersCount, &shooters, &shootersCount,
                            qry->stackToFree);
     } else if (strcmp(command, "shft") == 0) {
-      execute_shft_command(&shooters, &shootersCount);
+      execute_shft_command(&shooters, &shootersCount, loaders, &loadersCount);
     } else if (strcmp(command, "dsp") == 0) {
       execute_dsp_command(&shooters, &shootersCount, qry->arena,
                           qry->stackToFree);
     } else if (strcmp(command, "rjd") == 0) {
       execute_rjd_command(&shooters, &shootersCount, qry->stackToFree,
-                          qry->arena);
+                          qry->arena, loaders, &loadersCount);
     } else if (strcmp(command, "calc") == 0) {
       execute_calc_command(qry->arena, ground);
     } else
@@ -180,7 +186,9 @@ static void execute_pd_command(Shooter_t **shooters, int *shootersCount,
                                                 .y = atof(posY),
                                                 .shootingPosition = NULL,
                                                 .rightLoader = NULL,
-                                                .leftLoader = NULL};
+                                                .leftLoader = NULL,
+                                                .rightLoaderId = -1,
+                                                .leftLoaderId = -1};
 }
 
 static void execute_lc_command(Loader_t **loaders, int *loadersCount,
@@ -326,6 +334,8 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
 
     (*shooters)[shooterIndex].leftLoader = leftLoaderPtr;
     (*shooters)[shooterIndex].rightLoader = rightLoaderPtr;
+    (*shooters)[shooterIndex].leftLoaderId = leftLoaderIdInt;
+    (*shooters)[shooterIndex].rightLoaderId = rightLoaderIdInt;
   } else {
     printf("Error: Shooter with ID %d not found\n", shooterIdInt);
   }
@@ -333,7 +343,8 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
 
 static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
                                     int shooterId, const char *direction,
-                                    int times) {
+                                    int times, Loader_t *loaders,
+                                    int loadersCount) {
   int shooterIndex =
       find_shooter_index_by_id(shooters, shootersCount, shooterId);
   if (shooterIndex == -1) {
@@ -342,6 +353,28 @@ static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
   }
 
   Shooter_t *shooter = &(*shooters)[shooterIndex];
+
+  // Resolve current loader pointers from stored IDs (rebinding after reallocs)
+  Loader_t *resolvedLeft = NULL;
+  Loader_t *resolvedRight = NULL;
+  if (shooter->leftLoaderId != -1) {
+    for (int i = 0; i < loadersCount; i++) {
+      if (loaders[i].id == shooter->leftLoaderId) {
+        resolvedLeft = &loaders[i];
+        break;
+      }
+    }
+  }
+  if (shooter->rightLoaderId != -1) {
+    for (int i = 0; i < loadersCount; i++) {
+      if (loaders[i].id == shooter->rightLoaderId) {
+        resolvedRight = &loaders[i];
+        break;
+      }
+    }
+  }
+  shooter->leftLoader = resolvedLeft;
+  shooter->rightLoader = resolvedRight;
 
   for (int i = 0; i < times; i++) {
     if (strcmp(direction, "e") == 0) {
@@ -375,7 +408,8 @@ static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
   }
 }
 
-static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
+static void execute_shft_command(Shooter_t **shooters, int *shootersCount,
+                                 Loader_t *loaders, int *loadersCount) {
   char *shooterId = strtok(NULL, " ");
   char *leftOrRightButton = strtok(NULL, " ");
   char *timesPressed = strtok(NULL, " ");
@@ -384,7 +418,8 @@ static void execute_shft_command(Shooter_t **shooters, int *shootersCount) {
   int timesPressedInt = atoi(timesPressed);
 
   perform_shift_operation(shooters, *shootersCount, shooterIdInt,
-                          leftOrRightButton, timesPressedInt);
+                          leftOrRightButton, timesPressedInt, loaders,
+                          *loadersCount);
 }
 
 static void perform_shoot_operation(Shooter_t **shooters, int shootersCount,
@@ -448,7 +483,8 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
 }
 
 static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
-                                Stack stackToFree, Stack arena) {
+                                Stack stackToFree, Stack arena,
+                                Loader_t *loaders, int *loadersCount) {
   char *shooterId = strtok(NULL, " ");
   char *leftOrRightButton = strtok(NULL, " ");
   char *dx = strtok(NULL, " ");
@@ -471,6 +507,29 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
 
   Shooter_t *shooter = &(*shooters)[shooterIndex];
   Loader_t *loader = NULL;
+  // Rebind current pointers based on IDs in case loaders was reallocated
+  if (strcmp(leftOrRightButton, "e") == 0) {
+    // left side
+    int targetId = (*shooters)[shooterIndex].leftLoaderId;
+    if (targetId != -1) {
+      for (int i = 0; i < *loadersCount; i++) {
+        if (loaders[i].id == targetId) {
+          (*shooters)[shooterIndex].leftLoader = &loaders[i];
+          break;
+        }
+      }
+    }
+  } else if (strcmp(leftOrRightButton, "d") == 0) {
+    int targetId = (*shooters)[shooterIndex].rightLoaderId;
+    if (targetId != -1) {
+      for (int i = 0; i < *loadersCount; i++) {
+        if (loaders[i].id == targetId) {
+          (*shooters)[shooterIndex].rightLoader = &loaders[i];
+          break;
+        }
+      }
+    }
+  }
   // Select the same side that perform_shift_operation will consume from
   if (strcmp(leftOrRightButton, "e") == 0) {
     loader = shooter->leftLoader;
@@ -491,7 +550,7 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
   // Loop until loader is empty
   while (!stack_is_empty(*(loader->shapes))) {
     perform_shift_operation(shooters, *shootersCount, shooterIdInt,
-                            leftOrRightButton, 1);
+                            leftOrRightButton, 1, loaders, *loadersCount);
     perform_shoot_operation(shooters, *shootersCount, shooterIdInt,
                             times * incrementXDouble + dxDouble,
                             times * incrementYDouble + dyDouble, "i", arena,
