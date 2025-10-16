@@ -1,6 +1,7 @@
 #include "lib/args_handler/args_handler.h"
 #include "lib/file_reader/file_reader.h"
 #include "lib/geo_handler/geo_handler.h"
+#include "lib/qry_handler/qry_handler.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -21,28 +22,7 @@ int main(int argc, char *argv[]) {
   if (geo_input_path == NULL || output_path == NULL) {
     printf("Error: -f and -o are required\n");
     exit(1);
-  }typedef void *Ground;
-
-  /*
-      @param FileData fileData - The file data with .geo file lines
-      @param char* output_path - The path to the output file
-      @param char* command_suffix - The command suffix to add to the output file
-     name
-      @return Ground - The ground with the shapes
-  */
-  Ground execute_geo_commands(FileData fileData, const char *output_path,
-                              const char *command_suffix);
-  
-  /*
-      Destroys the ground and frees the memory,
-      this function should be called after the execution
-      of evereything that uses the ground
-  
-      @param Ground ground - The ground to destroy
-      @return void
-  */
-  void destroy_geo_waste(Ground ground);
-
+  }
   FileData geo_file = file_data_create(geo_input_path);
   if (geo_file == NULL) {
     printf("Error: Failed to create FileData\n");
@@ -50,8 +30,19 @@ int main(int argc, char *argv[]) {
   }
 
   Ground ground = execute_geo_commands(geo_file, output_path, command_suffix);
-  
-  
+
+  // If a .qry file was provided, execute its commands on the same ground
+  if (qry_input_path != NULL) {
+    FileData qry_file = file_data_create(qry_input_path);
+    if (qry_file == NULL) {
+      printf("Error: Failed to create FileData for .qry\n");
+      destroy_geo_waste(ground);
+      exit(1);
+    }
+
+    execute_qry_commands(qry_file, geo_file, ground, output_path);
+    file_data_destroy(qry_file);
+  }
 
   file_data_destroy(geo_file);
   destroy_geo_waste(ground);

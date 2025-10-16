@@ -8,8 +8,8 @@
 
 typedef void *Qry;
 
-void execute_qry_commands(FileData fileData, Ground ground,
-                          const char *output_path, const char *command_suffix);
+void execute_qry_commands(FileData qryFileData, FileData geoFileData,
+                          Ground ground, const char *output_path);
 
 void destroy_qry_waste(Qry qry);
 

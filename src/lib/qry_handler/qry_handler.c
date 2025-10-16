@@ -1,7 +1,13 @@
 #include "qry_handler.h"
+#include "../commons/queue/queue.h"
 #include "../commons/stack/stack.h"
 #include "../geo_handler/geo_handler.h"
+#include "../shapes/circle/circle.h"
+#include "../shapes/line/line.h"
+#include "../shapes/rectangle/rectangle.h"
 #include "../shapes/shapes.h"
+#include "../shapes/text/text.h"
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -58,12 +64,34 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
                                 Stack arena, Stack stackToFree);
 static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
                                 Stack stackToFree, Stack arena);
-static void execute_calc_command(Stack arena);
+static void execute_calc_command(Stack arena, Ground ground);
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
 
-void execute_qry_commands(FileData fileData, Ground ground,
-                          const char *output_path, const char *command_suffix) {
+// Helpers for calc
+static double shape_area(ShapeType type, void *shapeData);
+typedef struct {
+  double minX;
+  double minY;
+  double maxX;
+  double maxY;
+} Aabb;
+static Aabb make_aabb_for_shape_on_arena(const ShapePositionOnArena_t *s);
+static bool aabb_overlap(Aabb a, Aabb b);
+static bool shapes_overlap(const ShapePositionOnArena_t *a,
+                           const ShapePositionOnArena_t *b);
+static Shape_t *make_shape_wrapper(ShapeType type, void *data);
+static Shape_t *clone_with_border_color(Shape_t *src,
+                                        const char *newBorderColor);
+static Shape_t *clone_with_swapped_colors(Shape_t *src);
+
+// SVG writer for final .qry result
+static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
+                                 Ground ground, Stack arena,
+                                 const char *output_path);
+
+void execute_qry_commands(FileData qryFileData, FileData geoFileData,
+                          Ground ground, const char *output_path) {
 
   Qry_t *qry = malloc(sizeof(Qry_t));
   if (qry == NULL) {
@@ -76,34 +104,43 @@ void execute_qry_commands(FileData fileData, Ground ground,
   // Add qry to stackToFree for cleanup
   stack_push(qry->stackToFree, qry);
 
-  Shooter_t **shooters = NULL;
+  Shooter_t *shooters = NULL;
   int shootersCount = 0;
-  Loader_t **loaders = NULL;
+  Loader_t *loaders = NULL;
   int loadersCount = 0;
 
-  while (!queue_is_empty(get_file_lines_queue(fileData))) {
-    char *line = (char *)queue_dequeue(get_file_lines_queue(fileData));
-    char *command = strtok(line, " ");
+  while (!queue_is_empty(get_file_lines_queue(qryFileData))) {
+    char *line = (char *)queue_dequeue(get_file_lines_queue(qryFileData));
+    char *command = strtok(line, " \t\r\n");
+
+    if (command == NULL || *command == '\0') {
+      continue;
+    }
 
     if (strcmp(command, "pd") == 0) {
-      execute_pd_command(shooters, &shootersCount, qry->stackToFree);
+      execute_pd_command(&shooters, &shootersCount, qry->stackToFree);
     } else if (strcmp(command, "lc") == 0) {
-      execute_lc_command(loaders, &loadersCount, ground, qry->stackToFree);
+      execute_lc_command(&loaders, &loadersCount, ground, qry->stackToFree);
     } else if (strcmp(command, "atch") == 0) {
-      execute_atch_command(loaders, &loadersCount, shooters, &shootersCount);
+      execute_atch_command(&loaders, &loadersCount, &shooters, &shootersCount);
     } else if (strcmp(command, "shft") == 0) {
-      execute_shft_command(fileData, ground);
+      execute_shft_command(&shooters, &shootersCount);
     } else if (strcmp(command, "dsp") == 0) {
-      execute_dsp_command(shooters, &shootersCount, qry->arena,
+      execute_dsp_command(&shooters, &shootersCount, qry->arena,
                           qry->stackToFree);
     } else if (strcmp(command, "rjd") == 0) {
-      execute_rjd_command(shooters, &shootersCount, qry->stackToFree,
+      execute_rjd_command(&shooters, &shootersCount, qry->stackToFree,
                           qry->arena);
     } else if (strcmp(command, "calc") == 0) {
-      execute_calc_command(qry->arena);
+      execute_calc_command(qry->arena, ground);
     } else
       printf("Unknown command: %s\n", command);
   }
+
+  // After processing all commands, emit final SVG with remaining ground shapes
+  // and visual annotations derived from the arena
+  write_qry_result_svg(qryFileData, geoFileData, ground, qry->arena,
+                       output_path);
 }
 
 /*
@@ -377,10 +414,11 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
 
   Shooter_t *shooter = &(*shooters)[shooterIndex];
   Loader_t *loader = NULL;
+  // Select the same side that perform_shift_operation will consume from
   if (strcmp(leftOrRightButton, "e") == 0) {
-    loader = shooter->rightLoader;
-  } else if (strcmp(leftOrRightButton, "d") == 0) {
     loader = shooter->leftLoader;
+  } else if (strcmp(leftOrRightButton, "d") == 0) {
+    loader = shooter->rightLoader;
   } else {
     printf("Error: Invalid button (should be 'e' or 'd')\n");
     return;
@@ -394,7 +432,7 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
   int times = 1;
 
   // Loop until loader is empty
-  while (!stack_is_empty(loader->shapes)) {
+  while (!stack_is_empty(*(loader->shapes))) {
     perform_shift_operation(shooters, *shootersCount, shooterIdInt,
                             leftOrRightButton, 1);
     perform_shoot_operation(shooters, *shootersCount, shooterIdInt,
@@ -405,23 +443,84 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
   }
 }
 
-void execute_calc_command(Stack arena) {
+void execute_calc_command(Stack arena, Ground ground) {
 
-  FILE *svgFile = fopen("output.svg", "w");
-  if (svgFile == NULL) {
-    printf("Error: Failed to open output.svg\n");
-    exit(1);
-  }
-  fprintf(svgFile, "<svg width=\"100%%\" height=\"100%%\" viewBox=\"0 0 100 "
-                   "100\" xmlns=\"http://www.w3.org/2000/svg\">\n");
+  // FILE *svgFile = fopen("output.svg", "w");
+  // if (svgFile == NULL) {
+  //   printf("Error: Failed to open output.svg\n");
+  //   exit(1);
+  // }
+  // fprintf(svgFile, "<svg width=\"100%%\" height=\"100%%\" viewBox=\"0 0 100 "
+  //                  "100\" xmlns=\"http://www.w3.org/2000/svg\">\n");
 
-  ShapePositionOnArena_t *lastShapePositionOnArena = NULL;
-
+  // We need to process in launch order (oldest to newest). Arena is a stack
+  // (LIFO), so first reverse into a temporary stack to get FIFO order when
+  // popping.
+  Stack temp = stack_create();
   while (!stack_is_empty(arena)) {
-    ShapePositionOnArena_t *shapePositionOnArena =
-        (ShapePositionOnArena_t *)stack_pop(arena);
-    if (lastShapePositionOnArena != NULL) {
-      
+    stack_push(temp, stack_pop(arena));
+  }
+
+  // Now process adjacent pairs I (older) and J (I+1 newer).
+  while (!stack_is_empty(temp)) {
+    ShapePositionOnArena_t *I = (ShapePositionOnArena_t *)stack_pop(temp);
+    if (stack_is_empty(temp)) {
+      // No pair for I, just return to ground in original form
+      queue_enqueue(get_ground_queue(ground), I->shape);
+      continue;
+    }
+    ShapePositionOnArena_t *J = (ShapePositionOnArena_t *)stack_pop(temp);
+
+    bool overlap = shapes_overlap(I, J);
+    if (overlap) {
+      double areaI = shape_area(I->shape->type, I->shape->data);
+      double areaJ = shape_area(J->shape->type, J->shape->data);
+
+      if (areaI < areaJ) {
+        // I is destroyed; J goes back to ground
+        queue_enqueue(get_ground_queue(ground), J->shape);
+      } else if (areaI > areaJ) {
+        // I changes border color of J to fill color of I, if applicable
+        const char *fillColorI = NULL;
+        switch (I->shape->type) {
+        case CIRCLE:
+          fillColorI = circle_get_fill_color((Circle)I->shape->data);
+          break;
+        case RECTANGLE:
+          fillColorI = rectangle_get_fill_color((Rectangle)I->shape->data);
+          break;
+        case TEXT:
+          fillColorI = text_get_fill_color((Text)I->shape->data);
+          break;
+        case LINE:
+        case TEXT_STYLE:
+          fillColorI = NULL;
+          break;
+        }
+
+        Shape_t *Jprime = J->shape;
+        if (fillColorI != NULL) {
+          Jprime = clone_with_border_color(J->shape, fillColorI);
+        }
+
+        // Both return to ground in original relative order (I, then J')
+        queue_enqueue(get_ground_queue(ground), I->shape);
+        queue_enqueue(get_ground_queue(ground), Jprime);
+
+        // Clone I swapping border and fill (only if applicable)
+        Shape_t *Iclone = clone_with_swapped_colors(I->shape);
+        if (Iclone != NULL) {
+          queue_enqueue(get_ground_queue(ground), Iclone);
+        }
+      } else {
+        // Equal areas: both return unchanged
+        queue_enqueue(get_ground_queue(ground), I->shape);
+        queue_enqueue(get_ground_queue(ground), J->shape);
+      }
+    } else {
+      // No overlap: both return unchanged in the same relative order
+      queue_enqueue(get_ground_queue(ground), I->shape);
+      queue_enqueue(get_ground_queue(ground), J->shape);
     }
   }
 }
@@ -434,4 +533,460 @@ static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
     }
   }
   return -1;
+}
+
+// =====================
+// Helpers implementation
+// =====================
+
+static Shape_t *make_shape_wrapper(ShapeType type, void *data) {
+  Shape_t *s = (Shape_t *)malloc(sizeof(Shape_t));
+  if (s == NULL) {
+    printf("Error: Failed to allocate shape wrapper\n");
+    exit(1);
+  }
+  s->type = type;
+  s->data = data;
+  return s;
+}
+
+static double shape_area(ShapeType type, void *shapeData) {
+  switch (type) {
+  case CIRCLE: {
+    double r = circle_get_radius((Circle)shapeData);
+    return 3.141592653589793 * r * r;
+  }
+  case RECTANGLE: {
+    double w = rectangle_get_width((Rectangle)shapeData);
+    double h = rectangle_get_height((Rectangle)shapeData);
+    return w * h;
+  }
+  case LINE: {
+    double x1 = line_get_x1((Line)shapeData);
+    double y1 = line_get_y1((Line)shapeData);
+    double x2 = line_get_x2((Line)shapeData);
+    double y2 = line_get_y2((Line)shapeData);
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    double len = (dx * dx + dy * dy) > 0.0 ? sqrt(dx * dx + dy * dy) : 0.0;
+    return 2.0 * len;
+  }
+  case TEXT: {
+    const char *txt = text_get_text((Text)shapeData);
+    int len = (int)strlen(txt);
+    return 20.0 * (double)len;
+  }
+  case TEXT_STYLE:
+    return 0.0;
+  }
+  return 0.0;
+}
+
+static Aabb make_aabb_for_shape_on_arena(const ShapePositionOnArena_t *s) {
+  Aabb box;
+  switch (s->shape->type) {
+  case CIRCLE: {
+    double r = circle_get_radius((Circle)s->shape->data);
+    box.minX = s->x - r;
+    box.maxX = s->x + r;
+    box.minY = s->y - r;
+    box.maxY = s->y + r;
+    break;
+  }
+  case RECTANGLE: {
+    double w = rectangle_get_width((Rectangle)s->shape->data);
+    double h = rectangle_get_height((Rectangle)s->shape->data);
+    box.minX = s->x;
+    box.minY = s->y;
+    box.maxX = s->x + w;
+    box.maxY = s->y + h;
+    break;
+  }
+  case TEXT: {
+    const char *txt = text_get_text((Text)s->shape->data);
+    int len = (int)strlen(txt);
+    double height = 20.0;       // consistent with area rule
+    double width = (double)len; // width*height = 20*len
+    box.minX = s->x;
+    box.minY = s->y;
+    box.maxX = s->x + width;
+    box.maxY = s->y + height;
+    break;
+  }
+  case LINE: {
+    double x1 = line_get_x1((Line)s->shape->data);
+    double y1 = line_get_y1((Line)s->shape->data);
+    double x2 = line_get_x2((Line)s->shape->data);
+    double y2 = line_get_y2((Line)s->shape->data);
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    double minLocalX = (dx < 0.0) ? dx : 0.0;
+    double maxLocalX = (dx > 0.0) ? dx : 0.0;
+    double minLocalY = (dy < 0.0) ? dy : 0.0;
+    double maxLocalY = (dy > 0.0) ? dy : 0.0;
+    // thickness 2.0 => inflate by 1 on each side
+    box.minX = s->x + minLocalX - 1.0;
+    box.maxX = s->x + maxLocalX + 1.0;
+    box.minY = s->y + minLocalY - 1.0;
+    box.maxY = s->y + maxLocalY + 1.0;
+    break;
+  }
+  case TEXT_STYLE: {
+    // No extent, treat as empty box
+    box.minX = box.maxX = s->x;
+    box.minY = box.maxY = s->y;
+    break;
+  }
+  }
+  return box;
+}
+
+static bool aabb_overlap(Aabb a, Aabb b) {
+  if (a.maxX < b.minX)
+    return false;
+  if (b.maxX < a.minX)
+    return false;
+  if (a.maxY < b.minY)
+    return false;
+  if (b.maxY < a.minY)
+    return false;
+  return true;
+}
+
+static bool shapes_overlap(const ShapePositionOnArena_t *a,
+                           const ShapePositionOnArena_t *b) {
+  Aabb aa = make_aabb_for_shape_on_arena(a);
+  Aabb bb = make_aabb_for_shape_on_arena(b);
+  return aabb_overlap(aa, bb);
+}
+
+static Shape_t *clone_with_border_color(Shape_t *src,
+                                        const char *newBorderColor) {
+  switch (src->type) {
+  case CIRCLE: {
+    Circle c = (Circle)src->data;
+    int id = circle_get_id(c);
+    double x = 0.0; // position handled by arena, keep model values
+    double y = 0.0;
+    // Preserve original geometry from getters
+    x = circle_get_x(c);
+    y = circle_get_y(c);
+    double r = circle_get_radius(c);
+    const char *fill = circle_get_fill_color(c);
+    Circle nc = circle_create(id, x, y, r, newBorderColor, fill);
+    return make_shape_wrapper(CIRCLE, nc);
+  }
+  case RECTANGLE: {
+    Rectangle r = (Rectangle)src->data;
+    int id = rectangle_get_id(r);
+    double x = rectangle_get_x(r);
+    double y = rectangle_get_y(r);
+    double w = rectangle_get_width(r);
+    double h = rectangle_get_height(r);
+    const char *fill = rectangle_get_fill_color(r);
+    Rectangle nr = rectangle_create(id, x, y, w, h, newBorderColor, fill);
+    return make_shape_wrapper(RECTANGLE, nr);
+  }
+  case TEXT: {
+    Text t = (Text)src->data;
+    int id = text_get_id(t);
+    double x = text_get_x(t);
+    double y = text_get_y(t);
+    const char *fill = text_get_fill_color(t);
+    char anchor = text_get_anchor(t);
+    const char *txt = text_get_text(t);
+    Text nt = text_create(id, x, y, newBorderColor, fill, anchor, txt);
+    return make_shape_wrapper(TEXT, nt);
+  }
+  case LINE: {
+    Line l = (Line)src->data;
+    int id = line_get_id(l);
+    double x1 = line_get_x1(l);
+    double y1 = line_get_y1(l);
+    double x2 = line_get_x2(l);
+    double y2 = line_get_y2(l);
+    Line nl = line_create(id, x1, y1, x2, y2, newBorderColor);
+    return make_shape_wrapper(LINE, nl);
+  }
+  case TEXT_STYLE:
+    return NULL;
+  }
+  return NULL;
+}
+
+static Shape_t *clone_with_swapped_colors(Shape_t *src) {
+  switch (src->type) {
+  case CIRCLE: {
+    Circle c = (Circle)src->data;
+    int id = circle_get_id(c);
+    double x = circle_get_x(c);
+    double y = circle_get_y(c);
+    double r = circle_get_radius(c);
+    const char *border = circle_get_border_color(c);
+    const char *fill = circle_get_fill_color(c);
+    Circle nc = circle_create(id, x, y, r, fill, border);
+    return make_shape_wrapper(CIRCLE, nc);
+  }
+  case RECTANGLE: {
+    Rectangle r = (Rectangle)src->data;
+    int id = rectangle_get_id(r);
+    double x = rectangle_get_x(r);
+    double y = rectangle_get_y(r);
+    double w = rectangle_get_width(r);
+    double h = rectangle_get_height(r);
+    const char *border = rectangle_get_border_color(r);
+    const char *fill = rectangle_get_fill_color(r);
+    Rectangle nr = rectangle_create(id, x, y, w, h, fill, border);
+    return make_shape_wrapper(RECTANGLE, nr);
+  }
+  case TEXT: {
+    Text t = (Text)src->data;
+    int id = text_get_id(t);
+    double x = text_get_x(t);
+    double y = text_get_y(t);
+    const char *border = text_get_border_color(t);
+    const char *fill = text_get_fill_color(t);
+    char anchor = text_get_anchor(t);
+    const char *txt = text_get_text(t);
+    Text nt = text_create(id, x, y, fill, border, anchor, txt);
+    return make_shape_wrapper(TEXT, nt);
+  }
+  case LINE:
+  case TEXT_STYLE:
+    // No fill color to swap
+    return NULL;
+  }
+  return NULL;
+}
+
+// =====================
+// SVG writer implementation
+// =====================
+static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
+                                 Ground ground, Stack arena,
+                                 const char *output_path) {
+  const char *geo_name_src = get_file_name(geoFileData);
+  const char *qry_name_src = get_file_name(qryFileData);
+  size_t geo_len = strlen(geo_name_src);
+  size_t qry_len = strlen(qry_name_src);
+
+  char *geo_base = malloc(geo_len + 1);
+  char *qry_base = malloc(qry_len + 1);
+  if (geo_base == NULL || qry_base == NULL) {
+    printf("Error: Memory allocation failed for file name\n");
+    free(geo_base);
+    free(qry_base);
+    return;
+  }
+  strcpy(geo_base, geo_name_src);
+  strcpy(qry_base, qry_name_src);
+  strtok(geo_base, ".");
+  strtok(qry_base, ".");
+
+  // geoBase-qryBase.svg
+  size_t path_len = strlen(output_path);
+  size_t processed_name_len = strlen(geo_base) + 1 + strlen(qry_base);
+  size_t total_len = path_len + 1 + processed_name_len + 4 + 1;
+  char *output_path_with_file = malloc(total_len);
+  if (output_path_with_file == NULL) {
+    printf("Error: Memory allocation failed\n");
+    free(geo_base);
+    free(qry_base);
+    return;
+  }
+
+  int result = snprintf(output_path_with_file, total_len, "%s/%s-%s.svg",
+                        output_path, geo_base, qry_base);
+  if (result < 0 || (size_t)result >= total_len) {
+    printf("Error: Path construction failed\n");
+    free(output_path_with_file);
+    free(geo_base);
+    free(qry_base);
+    return;
+  }
+
+  FILE *file = fopen(output_path_with_file, "w");
+  if (file == NULL) {
+    printf("Error: Failed to open file: %s\n", output_path_with_file);
+    free(output_path_with_file);
+    free(geo_base);
+    free(qry_base);
+    return;
+  }
+
+  fprintf(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+  fprintf(
+      file,
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1000 1000\">\n");
+
+  // Render remaining shapes from Ground without destroying the queue
+  Queue groundQueue = get_ground_queue(ground);
+  Queue tempQueue = queue_create();
+  while (!queue_is_empty(groundQueue)) {
+    Shape_t *shape = (Shape_t *)queue_dequeue(groundQueue);
+    if (shape != NULL) {
+      if (shape->type == CIRCLE) {
+        Circle circle = (Circle)shape->data;
+        fprintf(
+            file,
+            "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s'/>\n",
+            circle_get_x(circle), circle_get_y(circle),
+            circle_get_radius(circle), circle_get_fill_color(circle),
+            circle_get_border_color(circle));
+      } else if (shape->type == RECTANGLE) {
+        Rectangle rectangle = (Rectangle)shape->data;
+        fprintf(file,
+                "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s' "
+                "stroke='%s'/>\n",
+                rectangle_get_x(rectangle), rectangle_get_y(rectangle),
+                rectangle_get_width(rectangle), rectangle_get_height(rectangle),
+                rectangle_get_fill_color(rectangle),
+                rectangle_get_border_color(rectangle));
+      } else if (shape->type == LINE) {
+        Line line = (Line)shape->data;
+        fprintf(file,
+                "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='%s'/>\n",
+                line_get_x1(line), line_get_y1(line), line_get_x2(line),
+                line_get_y2(line), line_get_color(line));
+      } else if (shape->type == TEXT) {
+        Text text = (Text)shape->data;
+        char anchor = text_get_anchor(text);
+        const char *text_anchor = "start";
+        if (anchor == 'm' || anchor == 'M') {
+          text_anchor = "middle";
+        } else if (anchor == 'e' || anchor == 'E') {
+          text_anchor = "end";
+        } else if (anchor == 's' || anchor == 'S') {
+          text_anchor = "start";
+        }
+        fprintf(file,
+                "<text x='%.2f' y='%.2f' fill='%s' stroke='%s' "
+                "text-anchor='%s'>%s</text>\n",
+                text_get_x(text), text_get_y(text), text_get_fill_color(text),
+                text_get_border_color(text), text_anchor, text_get_text(text));
+      }
+    }
+    queue_enqueue(tempQueue, shape);
+  }
+  // restore ground queue
+  while (!queue_is_empty(tempQueue)) {
+    queue_enqueue(groundQueue, queue_dequeue(tempQueue));
+  }
+  queue_destroy(tempQueue);
+
+  // Render shapes from arena at shot coordinates (without destroying the stack)
+  Stack tempStackShapes = stack_create();
+  while (!stack_is_empty(arena)) {
+    ShapePositionOnArena_t *s = (ShapePositionOnArena_t *)stack_pop(arena);
+    if (s != NULL && s->shape != NULL) {
+      if (s->shape->type == CIRCLE) {
+        Circle circle = (Circle)s->shape->data;
+        fprintf(
+            file,
+            "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s'/>\n",
+            s->x, s->y, circle_get_radius(circle),
+            circle_get_fill_color(circle), circle_get_border_color(circle));
+      } else if (s->shape->type == RECTANGLE) {
+        Rectangle rectangle = (Rectangle)s->shape->data;
+        fprintf(file,
+                "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s' "
+                "stroke='%s'/>\n",
+                s->x, s->y, rectangle_get_width(rectangle),
+                rectangle_get_height(rectangle),
+                rectangle_get_fill_color(rectangle),
+                rectangle_get_border_color(rectangle));
+      } else if (s->shape->type == LINE) {
+        Line line = (Line)s->shape->data;
+        double dx = line_get_x2(line) - line_get_x1(line);
+        double dy = line_get_y2(line) - line_get_y1(line);
+        fprintf(file,
+                "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='%s'/>\n",
+                s->x, s->y, s->x + dx, s->y + dy, line_get_color(line));
+      } else if (s->shape->type == TEXT) {
+        Text text = (Text)s->shape->data;
+        char anchor = text_get_anchor(text);
+        const char *text_anchor = "start"; // default
+        if (anchor == 'm' || anchor == 'M') {
+          text_anchor = "middle";
+        } else if (anchor == 'e' || anchor == 'E') {
+          text_anchor = "end";
+        } else if (anchor == 's' || anchor == 'S') {
+          text_anchor = "start";
+        }
+        fprintf(file,
+                "<text x='%.2f' y='%.2f' fill='%s' stroke='%s' "
+                "text-anchor='%s'>%s</text>\n",
+                s->x, s->y, text_get_fill_color(text),
+                text_get_border_color(text), text_anchor, text_get_text(text));
+      }
+    }
+    stack_push(tempStackShapes, s);
+  }
+  // restore arena stack (original order)
+  while (!stack_is_empty(tempStackShapes)) {
+    stack_push(arena, stack_pop(tempStackShapes));
+  }
+  stack_destroy(tempStackShapes);
+
+  // Render annotations from arena without destroying the stack
+  Stack tempStack = stack_create();
+  while (!stack_is_empty(arena)) {
+    ShapePositionOnArena_t *s = (ShapePositionOnArena_t *)stack_pop(arena);
+    if (s != NULL && s->isAnnotated) {
+      // dashed line from shooter to landed position
+      fprintf(file,
+              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='red' "
+              "stroke-dasharray='4,2' stroke-width='1'/>\n",
+              s->shooterX, s->shooterY, s->x, s->y);
+      // small circle marker at landed position
+      fprintf(file,
+              "<circle cx='%.2f' cy='%.2f' r='3' fill='none' stroke='red' "
+              "stroke-width='1'/>\n",
+              s->x, s->y);
+
+      // dimension guides (horizontal then vertical) and labels (dx, dy)
+      double dx = s->x - s->shooterX;
+      double dy = s->y - s->shooterY;
+      double midHx = s->shooterX + dx * 0.5;
+      double midHy = s->shooterY;
+      double midVx = s->x;
+      double midVy = s->shooterY + dy * 0.5;
+
+      // horizontal guide
+      fprintf(file,
+              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='purple' "
+              "stroke-dasharray='2,2' stroke-width='0.8'/>\n",
+              s->shooterX, s->shooterY, s->x, s->shooterY);
+      // vertical guide
+      fprintf(file,
+              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='purple' "
+              "stroke-dasharray='2,2' stroke-width='0.8'/>\n",
+              s->x, s->shooterY, s->x, s->y);
+
+      // dx label above horizontal guide
+      fprintf(file,
+              "<text x='%.2f' y='%.2f' fill='purple' font-size='12' "
+              "text-anchor='middle'>%.2f</text>\n",
+              midHx, midHy - 5.0, dx);
+
+      // dy label rotated near vertical guide
+      fprintf(file,
+              "<text x='%.2f' y='%.2f' fill='purple' font-size='12' "
+              "text-anchor='middle' transform='rotate(-90 %.2f "
+              "%.2f)'>%.2f</text>\n",
+              midVx + 10.0, midVy, midVx + 10.0, midVy, dy);
+    }
+    stack_push(tempStack, s);
+  }
+  // restore arena stack (original order)
+  while (!stack_is_empty(tempStack)) {
+    stack_push(arena, stack_pop(tempStack));
+  }
+  stack_destroy(tempStack);
+
+  fprintf(file, "</svg>\n");
+  fclose(file);
+  free(output_path_with_file);
+  free(geo_base);
+  free(qry_base);
 }

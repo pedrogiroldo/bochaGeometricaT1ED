@@ -1,0 +1,14 @@
+pd 1 100 100
+pd 2 900 800
+lc 10 5
+lc 20 4
+lc 30 6
+atch 1 10 20
+atch 2 20 30
+shft 1 e 2
+shft 2 d 1
+dsp 1 50 0 v
+dsp 2 -40 -30 i
+rjd 1 d 0 0 30 20
+rjd 2 e 10 -10 25 -15
+calc
