@@ -23,6 +23,7 @@ void stack_destroy(Stack stack);
 bool stack_push(Stack stack, void *data);
 void *stack_pop(Stack stack);
 void *stack_peek(Stack stack);
+void *stack_peek_at(Stack stack, int index);
 
 // Stack query functions
 bool stack_is_empty(Stack stack);

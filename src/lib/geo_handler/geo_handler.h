@@ -3,6 +3,7 @@
 */
 #ifndef GEO_HANDLER_H
 #define GEO_HANDLER_H
+#include "../commons/stack/stack.h"
 #include "../file_reader/file_reader.h"
 
 typedef void *Ground;
@@ -23,6 +24,13 @@ Ground execute_geo_commands(FileData fileData, const char *output_path,
     @return Queue - The ground queue
 */
 Queue get_ground_queue(Ground ground);
+
+/*
+    Gets the ground shapes stack to free
+    @param Ground ground - The ground to get the stack from
+    @return Stack - The shapes stack to free
+*/
+Stack get_ground_shapes_stack_to_free(Ground ground);
 
 /*
     Destroys the ground and frees the memory,

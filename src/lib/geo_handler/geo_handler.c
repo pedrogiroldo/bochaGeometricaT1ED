@@ -114,6 +114,11 @@ Queue get_ground_queue(Ground ground) {
   return ground_t->shapesQueue;
 }
 
+Stack get_ground_shapes_stack_to_free(Ground ground) {
+  Ground_t *ground_t = (Ground_t *)ground;
+  return ground_t->shapesStackToFree;
+}
+
 /**
 **************************
 * Private functions

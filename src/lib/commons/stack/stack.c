@@ -103,6 +103,33 @@ void *stack_peek(Stack stack) {
 }
 
 /**
+ * Returns the element at the specified index from the stack without removing it
+ * @param stack Pointer to the stack
+ * @param index Index of the element (0-based, 0 is top of stack)
+ * @return Data from element at index or NULL if invalid index or stack is empty
+ */
+void *stack_peek_at(Stack stack, int index) {
+  if (stack == NULL || stack_is_empty(stack) || index < 0) {
+    return NULL;
+  }
+
+  struct Stack *s = (struct Stack *)stack;
+  if (index >= s->size) {
+    return NULL;
+  }
+
+  StackNode *current = s->top;
+  for (int i = 0; i < index; i++) {
+    if (current == NULL) {
+      return NULL;
+    }
+    current = current->next;
+  }
+
+  return current->data;
+}
+
+/**
  * Checks if the stack is empty
  * @param stack Pointer to the stack
  * @return true if empty, false otherwise
