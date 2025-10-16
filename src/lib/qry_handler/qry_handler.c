@@ -34,9 +34,21 @@ typedef struct {
   int leftLoaderId; // stable identifier, avoids dangling pointers after realloc
 } Shooter_t;
 
+typedef enum {
+  FREE_SHOOTERS_ARRAY,
+  FREE_LOADERS_ARRAY,
+  FREE_SHAPE_POSITION,
+  FREE_STACK_HANDLE
+} FreeType;
+
 typedef struct {
-  Stack arena; // elements are ShapePositionOnArena_t
-  Stack stackToFree;
+  void *ptr;
+  FreeType type;
+} FreeItem;
+
+typedef struct {
+  Stack arena;       // elements are ShapePositionOnArena_t
+  Stack stackToFree; // elements are FreeItem
 } Qry_t;
 
 typedef struct {
@@ -75,6 +87,35 @@ static void execute_calc_command(Stack arena, Ground ground);
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
 
+void destroy_qry_waste(Qry qry) {
+  Qry_t *qry_t = (Qry_t *)qry;
+  while (!stack_is_empty(qry_t->stackToFree)) {
+    FreeItem *item = (FreeItem *)stack_pop(qry_t->stackToFree);
+
+    if (item != NULL && item->ptr != NULL) {
+      switch (item->type) {
+      case FREE_SHOOTERS_ARRAY:
+      case FREE_LOADERS_ARRAY:
+      case FREE_SHAPE_POSITION:
+        free(item->ptr);
+        break;
+      case FREE_STACK_HANDLE: {
+        Stack *stack_handle = (Stack *)item->ptr;
+        if (stack_handle != NULL && *stack_handle != NULL) {
+          stack_destroy(*stack_handle);
+        }
+        free(item->ptr);
+        break;
+      }
+      }
+      free(item);
+    }
+  }
+  stack_destroy(qry_t->arena);
+  stack_destroy(qry_t->stackToFree);
+  free(qry_t);
+}
+
 // Helpers for calc
 static double shape_area(ShapeType type, void *shapeData);
 typedef struct {
@@ -105,8 +146,8 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
                                  Ground ground, Stack arena,
                                  const char *output_path);
 
-void execute_qry_commands(FileData qryFileData, FileData geoFileData,
-                          Ground ground, const char *output_path) {
+Qry execute_qry_commands(FileData qryFileData, FileData geoFileData,
+                         Ground ground, const char *output_path) {
 
   Qry_t *qry = malloc(sizeof(Qry_t));
   if (qry == NULL) {
@@ -116,8 +157,7 @@ void execute_qry_commands(FileData qryFileData, FileData geoFileData,
   qry->arena = stack_create();
   qry->stackToFree = stack_create();
 
-  // Add qry to stackToFree for cleanup
-  stack_push(qry->stackToFree, qry);
+  // Note: qry should NOT be added to stackToFree as it causes premature freeing
 
   Shooter_t *shooters = NULL;
   int shootersCount = 0;
@@ -157,6 +197,8 @@ void execute_qry_commands(FileData qryFileData, FileData geoFileData,
   // and visual annotations derived from the arena
   write_qry_result_svg(qryFileData, geoFileData, ground, qry->arena,
                        output_path);
+
+  return (Qry)qry;
 }
 
 /*
@@ -180,7 +222,12 @@ static void execute_pd_command(Shooter_t **shooters, int *shootersCount,
   }
 
   // Add shooters array to stackToFree for cleanup
-  stack_push(stackToFree, *shooters);
+  FreeItem *shooters_item = malloc(sizeof(FreeItem));
+  if (shooters_item != NULL) {
+    shooters_item->ptr = *shooters;
+    shooters_item->type = FREE_SHOOTERS_ARRAY;
+    stack_push(stackToFree, shooters_item);
+  }
   (*shooters)[*shootersCount - 1] = (Shooter_t){.id = atoi(identifier),
                                                 .x = atof(posX),
                                                 .y = atof(posY),
@@ -218,7 +265,12 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
     }
 
     // Add loaders array to stackToFree for cleanup
-    stack_push(stackToFree, *loaders);
+    FreeItem *loaders_item = malloc(sizeof(FreeItem));
+    if (loaders_item != NULL) {
+      loaders_item->ptr = *loaders;
+      loaders_item->type = FREE_LOADERS_ARRAY;
+      stack_push(stackToFree, loaders_item);
+    }
     (*loaders)[*loadersCount - 1] = (Loader_t){.id = loaderId, .shapes = NULL};
     existingLoaderIndex = *loadersCount - 1;
   }
@@ -232,7 +284,12 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
     }
 
     // Add shapes stack to stackToFree for cleanup
-    stack_push(stackToFree, (*loaders)[existingLoaderIndex].shapes);
+    FreeItem *stack_item = malloc(sizeof(FreeItem));
+    if (stack_item != NULL) {
+      stack_item->ptr = (*loaders)[existingLoaderIndex].shapes;
+      stack_item->type = FREE_STACK_HANDLE;
+      stack_push(stackToFree, stack_item);
+    }
     *(*loaders)[existingLoaderIndex].shapes = stack_create();
     if (*(*loaders)[existingLoaderIndex].shapes == NULL) {
       printf("Error: Failed to create stack for Loader\n");
@@ -287,7 +344,12 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
         exit(1);
       }
       // Track the (re)allocated loaders array for later cleanup
-      stack_push(stackToFree, *loaders);
+      FreeItem *loaders_item = malloc(sizeof(FreeItem));
+      if (loaders_item != NULL) {
+        loaders_item->ptr = *loaders;
+        loaders_item->type = FREE_LOADERS_ARRAY;
+        stack_push(stackToFree, loaders_item);
+      }
       (*loaders)[*loadersCount - 1] =
           (Loader_t){.id = leftLoaderIdInt, .shapes = NULL};
       // Create empty shapes stack for the new loader
@@ -296,7 +358,12 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
         printf("Error: Failed to allocate memory for Loader stack\n");
         exit(1);
       }
-      stack_push(stackToFree, (*loaders)[*loadersCount - 1].shapes);
+      FreeItem *stack_item = malloc(sizeof(FreeItem));
+      if (stack_item != NULL) {
+        stack_item->ptr = (*loaders)[*loadersCount - 1].shapes;
+        stack_item->type = FREE_STACK_HANDLE;
+        stack_push(stackToFree, stack_item);
+      }
       *(*loaders)[*loadersCount - 1].shapes = stack_create();
       if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
         printf("Error: Failed to create stack for Loader\n");
@@ -314,7 +381,12 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
         exit(1);
       }
       // Track the (re)allocated loaders array for later cleanup
-      stack_push(stackToFree, *loaders);
+      FreeItem *loaders_item = malloc(sizeof(FreeItem));
+      if (loaders_item != NULL) {
+        loaders_item->ptr = *loaders;
+        loaders_item->type = FREE_LOADERS_ARRAY;
+        stack_push(stackToFree, loaders_item);
+      }
       (*loaders)[*loadersCount - 1] =
           (Loader_t){.id = rightLoaderIdInt, .shapes = NULL};
       // Create empty shapes stack for the new loader
@@ -323,7 +395,12 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
         printf("Error: Failed to allocate memory for Loader stack\n");
         exit(1);
       }
-      stack_push(stackToFree, (*loaders)[*loadersCount - 1].shapes);
+      FreeItem *stack_item = malloc(sizeof(FreeItem));
+      if (stack_item != NULL) {
+        stack_item->ptr = (*loaders)[*loadersCount - 1].shapes;
+        stack_item->type = FREE_STACK_HANDLE;
+        stack_push(stackToFree, stack_item);
+      }
       *(*loaders)[*loadersCount - 1].shapes = stack_create();
       if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
         printf("Error: Failed to create stack for Loader\n");
@@ -464,7 +541,12 @@ static void perform_shoot_operation(Shooter_t **shooters, int shootersCount,
   shooter->shootingPosition = NULL;
 
   stack_push(arena, (void *)shapePositionOnArena);
-  stack_push(stackToFree, (void *)shapePositionOnArena);
+  FreeItem *shape_item = malloc(sizeof(FreeItem));
+  if (shape_item != NULL) {
+    shape_item->ptr = shapePositionOnArena;
+    shape_item->type = FREE_SHAPE_POSITION;
+    stack_push(stackToFree, shape_item);
+  }
 }
 
 static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
@@ -669,6 +751,9 @@ void execute_calc_command(Stack arena, Ground ground) {
       }
     }
   }
+
+  // Clean up temporary stack
+  stack_destroy(temp);
 }
 
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,

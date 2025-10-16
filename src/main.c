@@ -40,12 +40,12 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-    execute_qry_commands(qry_file, geo_file, ground, output_path);
+    Qry qry = execute_qry_commands(qry_file, geo_file, ground, output_path);
     file_data_destroy(qry_file);
+    destroy_qry_waste(qry);
   }
 
   file_data_destroy(geo_file);
   destroy_geo_waste(ground);
-
   return 0;
 }
