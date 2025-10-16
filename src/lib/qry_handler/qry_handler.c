@@ -309,9 +309,9 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
   int loaderId = atoi(identifier);
   int newShapesCount = atoi(firstXShapes);
 
-  fprintf(txtFile, "[lc]");
-  fprintf(txtFile, "\tLoader ID: %d", loaderId);
-  fprintf(txtFile, "\tNew shapes count: %d", newShapesCount);
+  fprintf(txtFile, "[lc]\n");
+  fprintf(txtFile, "\tLoader ID: %d\n", loaderId);
+  fprintf(txtFile, "\tNew shapes count: %d\n", newShapesCount);
 
   // Check if loader already exists
   int existingLoaderIndex = -1;
@@ -681,11 +681,11 @@ static void execute_dsp_command(Shooter_t **shooters, int *shootersCount,
   double dxDouble = atof(dx);
   double dyDouble = atof(dy);
 
-  fprintf(txtFile, "[dsp]");
-  fprintf(txtFile, "\tShooter ID: %d", shooterIdInt);
-  fprintf(txtFile, "\tDX: %f", dxDouble);
-  fprintf(txtFile, "\tDY: %f", dyDouble);
-  fprintf(txtFile, "\tAnnotate dimensions: %s", annotateDimensions);
+  fprintf(txtFile, "[dsp]\n");
+  fprintf(txtFile, "\tShooter ID: %d\n", shooterIdInt);
+  fprintf(txtFile, "\tDX: %f\n", dxDouble);
+  fprintf(txtFile, "\tDY: %f\n", dyDouble);
+  fprintf(txtFile, "\tAnnotate dimensions: %s\n", annotateDimensions);
 
   perform_shoot_operation(shooters, *shootersCount, shooterIdInt, dxDouble,
                           dyDouble, annotateDimensions, arena, stackToFree);
@@ -757,13 +757,13 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
 
   int times = 1;
 
-  fprintf(txtFile, "[rjd]");
-  fprintf(txtFile, "\tShooter ID: %d", shooterIdInt);
-  fprintf(txtFile, "\tButton: %s", leftOrRightButton);
-  fprintf(txtFile, "\tDX: %f", dxDouble);
-  fprintf(txtFile, "\tDY: %f", dyDouble);
-  fprintf(txtFile, "\tIncrement X: %f", incrementXDouble);
-  fprintf(txtFile, "\tIncrement Y: %f", incrementYDouble);
+  fprintf(txtFile, "[rjd]\n");
+  fprintf(txtFile, "\tShooter ID: %d\n", shooterIdInt);
+  fprintf(txtFile, "\tButton: %s\n", leftOrRightButton);
+  fprintf(txtFile, "\tDX: %f\n", dxDouble);
+  fprintf(txtFile, "\tDY: %f\n", dyDouble);
+  fprintf(txtFile, "\tIncrement X: %f\n", incrementXDouble);
+  fprintf(txtFile, "\tIncrement Y: %f\n", incrementYDouble);
   fprintf(txtFile, "\n");
 
   // Loop until loader is empty
@@ -892,8 +892,8 @@ void execute_calc_command(Stack arena, Ground ground, FILE *txtFile) {
   }
 
   // Output the calculated result
-  fprintf(txtFile, "[calc]");
-  fprintf(txtFile, "\tResult: %.2lf", total_crushed_area);
+  fprintf(txtFile, "[calc]\n");
+  fprintf(txtFile, "\tResult: %.2lf\n", total_crushed_area);
   fprintf(txtFile, "\n");
   // Clean up temporary stack
   stack_destroy(temp);
