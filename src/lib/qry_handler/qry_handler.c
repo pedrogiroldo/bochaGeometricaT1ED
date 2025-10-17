@@ -823,7 +823,7 @@ void execute_calc_command(Stack arena, Ground ground, FILE *txtFile) {
         if (Jpos != NULL) {
           queue_enqueue(get_ground_queue(ground), Jpos);
         }
-      } else if (areaI > areaJ) {
+      } else if (areaI >= areaJ) {
         // I changes border color of J to fill color of I, if applicable
         const char *fillColorI = NULL;
         switch (I->shape->type) {
