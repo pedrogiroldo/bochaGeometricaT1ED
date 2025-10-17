@@ -788,16 +788,8 @@ void execute_calc_command(Stack arena, Ground ground, FILE *txtFile) {
     stack_push(temp, stack_pop(arena));
   }
 
-  // Calculate total crushed area BEFORE processing (while temp still has
-  // elements)
+  // Accumulate crushed area only for overlapping pairs (min area per pair)
   double total_crushed_area = 0.0;
-  for (int i = 0; i < stack_size(temp); i++) {
-    ShapePositionOnArena_t *item =
-        (ShapePositionOnArena_t *)stack_peek_at(temp, i);
-    if (item != NULL && item->isAnnotated) {
-      total_crushed_area += shape_area(item->shape->type, item->shape->data);
-    }
-  }
 
   // Now process adjacent pairs I (older) and J (I+1 newer).
   while (!stack_is_empty(temp)) {
@@ -816,6 +808,8 @@ void execute_calc_command(Stack arena, Ground ground, FILE *txtFile) {
     if (overlap) {
       double areaI = shape_area(I->shape->type, I->shape->data);
       double areaJ = shape_area(J->shape->type, J->shape->data);
+      // Add only the crushed area for this overlapping pair
+      total_crushed_area += (areaI < areaJ) ? areaI : areaJ;
 
       if (areaI < areaJ) {
         // I is destroyed; J goes back to ground at its arena position
