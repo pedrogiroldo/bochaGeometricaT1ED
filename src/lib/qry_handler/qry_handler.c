@@ -1,6 +1,7 @@
 #include "qry_handler.h"
 #include "../commons/queue/queue.h"
 #include "../commons/stack/stack.h"
+#include "../commons/utils/utils.h"
 #include "../geo_handler/geo_handler.h"
 #include "../shapes/circle/circle.h"
 #include "../shapes/line/line.h"
@@ -1160,9 +1161,23 @@ static Shape_t *clone_with_swapped_colors(Shape_t *src) {
     Text nt = text_create(id, x, y, fill, border, anchor, txt);
     return make_shape_wrapper(TEXT, nt);
   }
-  case LINE:
+  case LINE: {
+    Line l = (Line)src->data;
+    int id = line_get_id(l);
+    double x1 = line_get_x1(l);
+    double y1 = line_get_y1(l);
+    double x2 = line_get_x2(l);
+    double y2 = line_get_y2(l);
+    const char *c = line_get_color(l);
+    char *inv = invert_color(c);
+    if (inv == NULL)
+      return NULL;
+    Line nl = line_create(id, x1, y1, x2, y2, inv);
+    free(inv);
+    return make_shape_wrapper(LINE, nl);
+  }
   case TEXT_STYLE:
-    // No fill color to swap
+    // No color to invert on style descriptor
     return NULL;
   }
   return NULL;
@@ -1350,7 +1365,20 @@ static Shape_t *clone_with_swapped_colors_at_position(Shape_t *src, double x,
     cloned = make_shape_wrapper(TEXT, nt);
     break;
   }
-  case LINE:
+  case LINE: {
+    Line l = (Line)src->data;
+    int id = line_get_id(l);
+    double dx = line_get_x2(l) - line_get_x1(l);
+    double dy = line_get_y2(l) - line_get_y1(l);
+    const char *c = line_get_color(l);
+    char *inv = invert_color(c);
+    if (inv == NULL)
+      return NULL;
+    Line nl = line_create(id, x, y, x + dx, y + dy, inv);
+    free(inv);
+    cloned = make_shape_wrapper(LINE, nl);
+    break;
+  }
   case TEXT_STYLE:
     return NULL;
   }
