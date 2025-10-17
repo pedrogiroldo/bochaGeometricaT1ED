@@ -977,14 +977,49 @@ static Aabb make_aabb_for_shape_on_arena(const ShapePositionOnArena_t *s) {
     break;
   }
   case TEXT: {
-    const char *txt = text_get_text((Text)s->shape->data);
+    // Treat text as a horizontal segment based on anchor, with length 10.0 *
+    // |t|
+    Text t = (Text)s->shape->data;
+    const char *txt = text_get_text(t);
     int len = (int)strlen(txt);
-    double height = 20.0;       // consistent with area rule
-    double width = (double)len; // width*height = 20*len
-    box.minX = s->x;
-    box.minY = s->y;
-    box.maxX = s->x + width;
-    box.maxY = s->y + height;
+    double segLen = 10.0 * (double)len;
+    char anchor = text_get_anchor(t);
+    double x1 = s->x;
+    double y1 = s->y;
+    double x2 = s->x;
+    double y2 = s->y;
+    if (anchor == 'i' || anchor == 'I') {
+      // start anchor to the right
+      x2 = s->x + segLen;
+      y2 = s->y;
+    } else if (anchor == 'f' || anchor == 'F' || anchor == 'e' ||
+               anchor == 'E') {
+      // end anchor to the left (Portuguese 'f'inal / 'e'nd)
+      x1 = s->x - segLen;
+      y1 = s->y;
+    } else if (anchor == 'm' || anchor == 'M') {
+      // middle anchor centered at s->x
+      x1 = s->x - segLen * 0.5;
+      y1 = s->y;
+      x2 = s->x + segLen * 0.5;
+      y2 = s->y;
+    } else {
+      // default to start ('i') if unknown
+      x2 = s->x + segLen;
+      y2 = s->y;
+    }
+
+    double dx = x2 - x1;
+    double dy = y2 - y1; // will be 0.0 for horizontal segment
+    double minLocalX = (dx < 0.0) ? dx : 0.0;
+    double maxLocalX = (dx > 0.0) ? dx : 0.0;
+    double minLocalY = (dy < 0.0) ? dy : 0.0;
+    double maxLocalY = (dy > 0.0) ? dy : 0.0;
+    // thickness 2.0 => inflate by 1 on each side (same rule as LINE)
+    box.minX = x1 + minLocalX - 1.0;
+    box.maxX = x1 + maxLocalX + 1.0;
+    box.minY = y1 + minLocalY - 1.0;
+    box.maxY = y1 + maxLocalY + 1.0;
     break;
   }
   case LINE: {
