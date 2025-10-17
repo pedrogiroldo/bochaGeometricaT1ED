@@ -1384,8 +1384,8 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
   }
 
   fprintf(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-  fprintf(file, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10000 "
-                "10000\">\n");
+  fprintf(file, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1000 "
+                "1000\">\n");
 
   // Render remaining shapes from Ground without destroying the queue
   Queue groundQueue = get_ground_queue(ground);
