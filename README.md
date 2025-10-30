@@ -1,7 +1,5 @@
 # 🎯 Bocha Geométrica T1ED
 
-### Pedro Andrade Giroldo >202500560625
-
 Um processador de comandos geométricos desenvolvido em C99 que processa arquivos `.geo` e `.qry` para gerar visualizações SVG.
 
 ## 🚀 Como Executar
