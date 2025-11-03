@@ -86,7 +86,8 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
                                 Stack stackToFree, Stack arena,
                                 Loader_t *loaders, int *loadersCount,
                                 FILE *txtFile);
-static void execute_calc_command(Stack arena, Ground ground, FILE *txtFile);
+static void execute_calc_command(Stack arena, Ground ground, FILE *txtFile,
+                                 int totalCommands);
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
 
@@ -209,6 +210,9 @@ Qry execute_qry_commands(FileData qryFileData, FileData geoFileData,
   free(qry_base);
   free(output_txt_path);
 
+  // Get total number of commands (lines) before processing
+  int totalCommands = queue_size(get_file_lines_queue(qryFileData));
+
   while (!queue_is_empty(get_file_lines_queue(qryFileData))) {
     char *line = (char *)queue_dequeue(get_file_lines_queue(qryFileData));
     char *command = strtok(line, " \t\r\n");
@@ -235,7 +239,7 @@ Qry execute_qry_commands(FileData qryFileData, FileData geoFileData,
       execute_rjd_command(&shooters, &shootersCount, qry->stackToFree,
                           qry->arena, loaders, &loadersCount, txtFile);
     } else if (strcmp(command, "calc") == 0) {
-      execute_calc_command(qry->arena, ground, txtFile);
+      execute_calc_command(qry->arena, ground, txtFile, totalCommands);
     } else
       printf("Unknown command: %s\n", command);
   }
@@ -779,7 +783,8 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
   }
 }
 
-void execute_calc_command(Stack arena, Ground ground, FILE *txtFile) {
+void execute_calc_command(Stack arena, Ground ground, FILE *txtFile,
+                          int totalCommands) {
   // We need to process in launch order (oldest to newest). Arena is a stack
   // (LIFO), so first reverse into a temporary stack to get FIFO order when
   // popping.
@@ -889,6 +894,7 @@ void execute_calc_command(Stack arena, Ground ground, FILE *txtFile) {
   // Output the calculated result
   fprintf(txtFile, "[calc]\n");
   fprintf(txtFile, "\tResult: %.2lf\n", total_crushed_area);
+  fprintf(txtFile, "\tTotal commands executed: %d\n", totalCommands);
   fprintf(txtFile, "\n");
   // Clean up temporary stack
   stack_destroy(temp);
