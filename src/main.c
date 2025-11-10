@@ -4,6 +4,7 @@
 #include "lib/qry_handler/qry_handler.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(int argc, char *argv[]) {
 
@@ -15,9 +16,54 @@ int main(int argc, char *argv[]) {
   // Get arguments
   const char *output_path = get_option_value(argc, argv, "o");
   const char *geo_input_path = get_option_value(argc, argv, "f");
+  const char *prefix_path = get_option_value(argc, argv, "e");
   const char *qry_input_path = get_option_value(argc, argv, "q");
   const char *command_suffix = get_command_suffix(argc, argv);
 
+  // Apply prefix_path if it exists
+  char *full_geo_path = NULL;
+  char *full_output_path = NULL;
+  char *full_qry_path = NULL;
+
+  if (prefix_path != NULL) {
+    size_t prefix_len = strlen(prefix_path);
+    int needs_slash = (prefix_len > 0 && prefix_path[prefix_len - 1] != '/');
+
+    if (geo_input_path != NULL) {
+      size_t geo_len = strlen(geo_input_path);
+      full_geo_path = (char *)malloc(prefix_len + geo_len + 2);
+      if (needs_slash) {
+        sprintf(full_geo_path, "%s/%s", prefix_path, geo_input_path);
+      } else {
+        sprintf(full_geo_path, "%s%s", prefix_path, geo_input_path);
+      }
+      geo_input_path = full_geo_path;
+    }
+
+    if (output_path != NULL) {
+      size_t output_len = strlen(output_path);
+      full_output_path = (char *)malloc(prefix_len + output_len + 2);
+      if (needs_slash) {
+        sprintf(full_output_path, "%s/%s", prefix_path, output_path);
+      } else {
+        sprintf(full_output_path, "%s%s", prefix_path, output_path);
+      }
+      output_path = full_output_path;
+    }
+
+    if (qry_input_path != NULL) {
+      size_t qry_len = strlen(qry_input_path);
+      full_qry_path = (char *)malloc(prefix_len + qry_len + 2);
+      if (needs_slash) {
+        sprintf(full_qry_path, "%s/%s", prefix_path, qry_input_path);
+      } else {
+        sprintf(full_qry_path, "%s%s", prefix_path, qry_input_path);
+      }
+      qry_input_path = full_qry_path;
+    }
+  }
+
+  
   // Verify required arguments
   if (geo_input_path == NULL || output_path == NULL) {
     printf("Error: -f and -o are required\n");
@@ -28,7 +74,8 @@ int main(int argc, char *argv[]) {
     printf("Error: Failed to create FileData\n");
     exit(1);
   }
-
+  
+  
   Ground ground = execute_geo_commands(geo_file, output_path, command_suffix);
 
   // If a .qry file was provided, execute its commands on the same ground
@@ -47,5 +94,11 @@ int main(int argc, char *argv[]) {
 
   file_data_destroy(geo_file);
   destroy_geo_waste(ground);
+
+  // Free allocated memory for paths
+  if (full_geo_path != NULL) free(full_geo_path);
+  if (full_output_path != NULL) free(full_output_path);
+  if (full_qry_path != NULL) free(full_qry_path);
+
   return 0;
 }
