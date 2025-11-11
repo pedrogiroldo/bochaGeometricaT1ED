@@ -13,7 +13,7 @@ make
 ### 2. Executar o Programa
 
 ```bash
-./ted -f <arquivo.geo> -o <diretorio_saida> [-q <arquivo.qry>] [sufixo]
+./ted -f <arquivo.geo> -o <diretorio_saida> [-e <prefixo_caminho>] [-q <arquivo.qry>] [sufixo]
 ```
 
 #### Parâmetros Obrigatórios:
@@ -23,6 +23,7 @@ make
 
 #### Parâmetros Opcionais:
 
+- `-e <prefixo_caminho>`: Prefixo de caminho aplicado aos arquivos `-f` e `-q` (opcional)
 - `-q <arquivo.qry>`: Arquivo de consultas (opcional)
 - `sufixo`: Sufixo para os arquivos de saída (opcional)
 
@@ -44,6 +45,12 @@ make
 
 ```bash
 ./ted -f test_files/geo/retg-cres.geo -o output -q test_files/qry/dsp-cruz-alt.qry sufixo
+```
+
+### Exemplo com Prefixo de Caminho (-e):
+
+```bash
+./ted -e test_files -f geo/complex.geo -o output -q qry/complex.qry
 ```
 
 ## 🗂️ Estrutura do Projeto
