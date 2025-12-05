@@ -383,16 +383,24 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
     }
   }
 
-  // Add new shapes to the stack
+  // Add new shapes to the stack in reverse order
+  // (so first shape from ground is on top and fires first)
+  Stack tempStack = stack_create();
   for (int i = 0; i < newShapesCount; i++) {
     Shape_t *shape = queue_dequeue(get_ground_queue(ground));
     if (shape != NULL) {
-      if (!stack_push(*(*loaders)[existingLoaderIndex].shapes, shape)) {
-        printf("Error: Failed to push shape to loader stack\n");
-        exit(1);
-      }
+      stack_push(tempStack, shape);
     }
   }
+  // Now pop from temp and push to loader (reverses the order)
+  while (!stack_is_empty(tempStack)) {
+    Shape_t *shape = stack_pop(tempStack);
+    if (!stack_push(*(*loaders)[existingLoaderIndex].shapes, shape)) {
+      printf("Error: Failed to push shape to loader stack\n");
+      exit(1);
+    }
+  }
+  stack_destroy(tempStack);
 }
 
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
@@ -786,9 +794,6 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
 void execute_calc_command(Stack arena, Ground ground, FILE *txtFile,
                           int totalCommands, FileData qryFileData,
                           FileData geoFileData, const char *output_path) {
-  // Generate SVG BEFORE emptying the arena so dispatched shapes are visible
-  write_qry_result_svg(qryFileData, geoFileData, ground, arena, output_path);
-
   // We need to process in launch order (oldest to newest). Arena is a stack
   // (LIFO), so first reverse into a temporary stack to get FIFO order when
   // popping.
@@ -902,6 +907,11 @@ void execute_calc_command(Stack arena, Ground ground, FILE *txtFile,
   fprintf(txtFile, "\n");
   // Clean up temporary stack
   stack_destroy(temp);
+
+  // Generate SVG AFTER processing collisions, showing only surviving shapes
+  write_qry_result_svg(qryFileData, geoFileData, ground, arena, output_path);
+
+  // Output the calculated result
 }
 
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
@@ -1462,17 +1472,17 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
     if (shape != NULL) {
       if (shape->type == CIRCLE) {
         Circle circle = (Circle)shape->data;
-        fprintf(
-            file,
-            "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s'/>\n",
-            circle_get_x(circle), circle_get_y(circle),
-            circle_get_radius(circle), circle_get_fill_color(circle),
-            circle_get_border_color(circle));
+        fprintf(file,
+                "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s' "
+                "fill-opacity='0.5'/>\n",
+                circle_get_x(circle), circle_get_y(circle),
+                circle_get_radius(circle), circle_get_fill_color(circle),
+                circle_get_border_color(circle));
       } else if (shape->type == RECTANGLE) {
         Rectangle rectangle = (Rectangle)shape->data;
         fprintf(file,
                 "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s' "
-                "stroke='%s'/>\n",
+                "stroke='%s' fill-opacity='0.5'/>\n",
                 rectangle_get_x(rectangle), rectangle_get_y(rectangle),
                 rectangle_get_width(rectangle), rectangle_get_height(rectangle),
                 rectangle_get_fill_color(rectangle),
@@ -1496,7 +1506,7 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
         }
         fprintf(file,
                 "<text x='%.2f' y='%.2f' fill='%s' stroke='%s' "
-                "text-anchor='%s'>%s</text>\n",
+                "text-anchor='%s' fill-opacity='0.5'>%s</text>\n",
                 text_get_x(text), text_get_y(text), text_get_fill_color(text),
                 text_get_border_color(text), text_anchor, text_get_text(text));
       }
@@ -1519,17 +1529,18 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
       if (shape != NULL) {
         if (shape->type == CIRCLE) {
           Circle circle = (Circle)shape->data;
-          fprintf(
-              file,
-              "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s'/>\n",
-              s->x, s->y, circle_get_radius(circle),
-              circle_get_fill_color(circle), circle_get_border_color(circle));
+          fprintf(file,
+                  "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s' "
+                  "fill-opacity='0.5'/>\n",
+                  s->x, s->y, circle_get_radius(circle),
+                  circle_get_fill_color(circle),
+                  circle_get_border_color(circle));
         } else if (shape->type == RECTANGLE) {
           Rectangle rectangle = (Rectangle)shape->data;
           fprintf(
               file,
               "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s' "
-              "stroke='%s'/>\n",
+              "stroke='%s' fill-opacity='0.5'/>\n",
               s->x, s->y, rectangle_get_width(rectangle),
               rectangle_get_height(rectangle),
               rectangle_get_fill_color(rectangle),
@@ -1555,7 +1566,7 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
           }
           fprintf(file,
                   "<text x='%.2f' y='%.2f' fill='%s' stroke='%s' "
-                  "text-anchor='%s'>%s</text>\n",
+                  "text-anchor='%s' fill-opacity='0.5'>%s</text>\n",
                   s->x, s->y, text_get_fill_color(text),
                   text_get_border_color(text), text_anchor,
                   text_get_text(text));
