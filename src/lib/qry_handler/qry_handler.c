@@ -87,7 +87,8 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
                                 Loader_t *loaders, int *loadersCount,
                                 FILE *txtFile);
 static void execute_calc_command(Stack arena, Ground ground, FILE *txtFile,
-                                 int totalCommands);
+                                 int totalCommands, FileData qryFileData,
+                                 FileData geoFileData, const char *output_path);
 static int find_shooter_index_by_id(Shooter_t **shooters, int shootersCount,
                                     int id);
 
@@ -239,15 +240,13 @@ Qry execute_qry_commands(FileData qryFileData, FileData geoFileData,
       execute_rjd_command(&shooters, &shootersCount, qry->stackToFree,
                           qry->arena, loaders, &loadersCount, txtFile);
     } else if (strcmp(command, "calc") == 0) {
-      execute_calc_command(qry->arena, ground, txtFile, totalCommands);
+      execute_calc_command(qry->arena, ground, txtFile, totalCommands,
+                           qryFileData, geoFileData, output_path);
     } else
       printf("Unknown command: %s\n", command);
   }
 
-  // After processing all commands, emit final SVG with remaining ground shapes
-  // and visual annotations derived from the arena
-  write_qry_result_svg(qryFileData, geoFileData, ground, qry->arena,
-                       output_path);
+  // SVG is now generated inside execute_calc_command before arena is emptied
 
   fclose(txtFile);
   return (Qry)qry;
@@ -574,21 +573,7 @@ static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
 
   for (int i = 0; i < times; i++) {
     if (strcmp(direction, "e") == 0) {
-      // Check if left loader exists and has shapes
-      if (shooter->leftLoader == NULL ||
-          stack_is_empty(*(shooter->leftLoader->shapes))) {
-        continue; // Skip silently if no shapes available
-      }
-
-      // If shooter has a shape, move it to right loader
-      if (shooter->shootingPosition != NULL && shooter->rightLoader != NULL) {
-        stack_push(*(shooter->rightLoader->shapes), shooter->shootingPosition);
-      }
-
-      shooter->shootingPosition = stack_pop(*(shooter->leftLoader->shapes));
-    }
-    if (strcmp(direction, "d") == 0) {
-      // Check if right loader exists and has shapes
+      // Left button: takes from RIGHT loader, displaced shape goes to LEFT
       if (shooter->rightLoader == NULL ||
           stack_is_empty(*(shooter->rightLoader->shapes))) {
         continue; // Skip silently if no shapes available
@@ -600,6 +585,20 @@ static void perform_shift_operation(Shooter_t **shooters, int shootersCount,
       }
 
       shooter->shootingPosition = stack_pop(*(shooter->rightLoader->shapes));
+    }
+    if (strcmp(direction, "d") == 0) {
+      // Right button: takes from LEFT loader, displaced shape goes to RIGHT
+      if (shooter->leftLoader == NULL ||
+          stack_is_empty(*(shooter->leftLoader->shapes))) {
+        continue; // Skip silently if no shapes available
+      }
+
+      // If shooter has a shape, move it to right loader
+      if (shooter->shootingPosition != NULL && shooter->rightLoader != NULL) {
+        stack_push(*(shooter->rightLoader->shapes), shooter->shootingPosition);
+      }
+
+      shooter->shootingPosition = stack_pop(*(shooter->leftLoader->shapes));
     }
   }
 }
@@ -724,17 +723,7 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
   Loader_t *loader = NULL;
   // Rebind current pointers based on IDs in case loaders was reallocated
   if (strcmp(leftOrRightButton, "e") == 0) {
-    // left side
-    int targetId = (*shooters)[shooterIndex].leftLoaderId;
-    if (targetId != -1) {
-      for (int i = 0; i < *loadersCount; i++) {
-        if (loaders[i].id == targetId) {
-          (*shooters)[shooterIndex].leftLoader = &loaders[i];
-          break;
-        }
-      }
-    }
-  } else if (strcmp(leftOrRightButton, "d") == 0) {
+    // Left button uses RIGHT loader (inverted logic)
     int targetId = (*shooters)[shooterIndex].rightLoaderId;
     if (targetId != -1) {
       for (int i = 0; i < *loadersCount; i++) {
@@ -744,12 +733,23 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
         }
       }
     }
+  } else if (strcmp(leftOrRightButton, "d") == 0) {
+    // Right button uses LEFT loader (inverted logic)
+    int targetId = (*shooters)[shooterIndex].leftLoaderId;
+    if (targetId != -1) {
+      for (int i = 0; i < *loadersCount; i++) {
+        if (loaders[i].id == targetId) {
+          (*shooters)[shooterIndex].leftLoader = &loaders[i];
+          break;
+        }
+      }
+    }
   }
   // Select the same side that perform_shift_operation will consume from
   if (strcmp(leftOrRightButton, "e") == 0) {
-    loader = shooter->leftLoader;
-  } else if (strcmp(leftOrRightButton, "d") == 0) {
     loader = shooter->rightLoader;
+  } else if (strcmp(leftOrRightButton, "d") == 0) {
+    loader = shooter->leftLoader;
   } else {
     printf("Error: Invalid button (should be 'e' or 'd')\n");
     return;
@@ -760,7 +760,7 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
     return;
   }
 
-  int times = 1;
+  int times = 0;
 
   fprintf(txtFile, "[rjd]\n");
   fprintf(txtFile, "\tShooter ID: %d\n", shooterIdInt);
@@ -784,7 +784,11 @@ static void execute_rjd_command(Shooter_t **shooters, int *shootersCount,
 }
 
 void execute_calc_command(Stack arena, Ground ground, FILE *txtFile,
-                          int totalCommands) {
+                          int totalCommands, FileData qryFileData,
+                          FileData geoFileData, const char *output_path) {
+  // Generate SVG BEFORE emptying the arena so dispatched shapes are visible
+  write_qry_result_svg(qryFileData, geoFileData, ground, arena, output_path);
+
   // We need to process in launch order (oldest to newest). Arena is a stack
   // (LIFO), so first reverse into a temporary stack to get FIFO order when
   // popping.
@@ -1505,53 +1509,104 @@ static void write_qry_result_svg(FileData qryFileData, FileData geoFileData,
   }
   queue_destroy(tempQueue);
 
-  // Render annotations from arena without destroying the stack
+  // Render shapes and annotations from arena without destroying the stack
   Stack tempStack = stack_create();
   while (!stack_is_empty(arena)) {
     ShapePositionOnArena_t *s = (ShapePositionOnArena_t *)stack_pop(arena);
-    if (s != NULL && s->isAnnotated) {
-      // dashed line from shooter to landed position
-      fprintf(file,
-              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='red' "
-              "stroke-dasharray='4,2' stroke-width='1'/>\n",
-              s->shooterX, s->shooterY, s->x, s->y);
-      // small circle marker at landed position
-      fprintf(file,
-              "<circle cx='%.2f' cy='%.2f' r='3' fill='none' stroke='red' "
-              "stroke-width='1'/>\n",
-              s->x, s->y);
+    if (s != NULL) {
+      // Render the shape at its arena position
+      Shape_t *shape = s->shape;
+      if (shape != NULL) {
+        if (shape->type == CIRCLE) {
+          Circle circle = (Circle)shape->data;
+          fprintf(
+              file,
+              "<circle cx='%.2f' cy='%.2f' r='%.2f' fill='%s' stroke='%s'/>\n",
+              s->x, s->y, circle_get_radius(circle),
+              circle_get_fill_color(circle), circle_get_border_color(circle));
+        } else if (shape->type == RECTANGLE) {
+          Rectangle rectangle = (Rectangle)shape->data;
+          fprintf(
+              file,
+              "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s' "
+              "stroke='%s'/>\n",
+              s->x, s->y, rectangle_get_width(rectangle),
+              rectangle_get_height(rectangle),
+              rectangle_get_fill_color(rectangle),
+              rectangle_get_border_color(rectangle));
+        } else if (shape->type == LINE) {
+          Line line = (Line)shape->data;
+          double dx = line_get_x2(line) - line_get_x1(line);
+          double dy = line_get_y2(line) - line_get_y1(line);
+          fprintf(
+              file,
+              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='%s'/>\n",
+              s->x, s->y, s->x + dx, s->y + dy, line_get_color(line));
+        } else if (shape->type == TEXT) {
+          Text text = (Text)shape->data;
+          char anchor = text_get_anchor(text);
+          const char *text_anchor = "start";
+          if (anchor == 'm' || anchor == 'M') {
+            text_anchor = "middle";
+          } else if (anchor == 'e' || anchor == 'E') {
+            text_anchor = "end";
+          } else if (anchor == 's' || anchor == 'S') {
+            text_anchor = "start";
+          }
+          fprintf(file,
+                  "<text x='%.2f' y='%.2f' fill='%s' stroke='%s' "
+                  "text-anchor='%s'>%s</text>\n",
+                  s->x, s->y, text_get_fill_color(text),
+                  text_get_border_color(text), text_anchor,
+                  text_get_text(text));
+        }
+      }
 
-      // dimension guides (horizontal then vertical) and labels (dx, dy)
-      double dx = s->x - s->shooterX;
-      double dy = s->y - s->shooterY;
-      double midHx = s->shooterX + dx * 0.5;
-      double midHy = s->shooterY;
-      double midVx = s->x;
-      double midVy = s->shooterY + dy * 0.5;
+      // Render annotations if enabled
+      if (s->isAnnotated) {
+        // dashed line from shooter to landed position
+        fprintf(file,
+                "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='red' "
+                "stroke-dasharray='4,2' stroke-width='1'/>\n",
+                s->shooterX, s->shooterY, s->x, s->y);
+        // small circle marker at landed position
+        fprintf(file,
+                "<circle cx='%.2f' cy='%.2f' r='3' fill='none' stroke='red' "
+                "stroke-width='1'/>\n",
+                s->x, s->y);
 
-      // horizontal guide
-      fprintf(file,
-              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='purple' "
-              "stroke-dasharray='2,2' stroke-width='0.8'/>\n",
-              s->shooterX, s->shooterY, s->x, s->shooterY);
-      // vertical guide
-      fprintf(file,
-              "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='purple' "
-              "stroke-dasharray='2,2' stroke-width='0.8'/>\n",
-              s->x, s->shooterY, s->x, s->y);
+        // dimension guides (horizontal then vertical) and labels (dx, dy)
+        double dx = s->x - s->shooterX;
+        double dy = s->y - s->shooterY;
+        double midHx = s->shooterX + dx * 0.5;
+        double midHy = s->shooterY;
+        double midVx = s->x;
+        double midVy = s->shooterY + dy * 0.5;
 
-      // dx label above horizontal guide
-      fprintf(file,
-              "<text x='%.2f' y='%.2f' fill='purple' font-size='12' "
-              "text-anchor='middle'>%.2f</text>\n",
-              midHx, midHy - 5.0, dx);
+        // horizontal guide
+        fprintf(file,
+                "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='purple' "
+                "stroke-dasharray='2,2' stroke-width='0.8'/>\n",
+                s->shooterX, s->shooterY, s->x, s->shooterY);
+        // vertical guide
+        fprintf(file,
+                "<line x1='%.2f' y1='%.2f' x2='%.2f' y2='%.2f' stroke='purple' "
+                "stroke-dasharray='2,2' stroke-width='0.8'/>\n",
+                s->x, s->shooterY, s->x, s->y);
 
-      // dy label rotated near vertical guide
-      fprintf(file,
-              "<text x='%.2f' y='%.2f' fill='purple' font-size='12' "
-              "text-anchor='middle' transform='rotate(-90 %.2f "
-              "%.2f)'>%.2f</text>\n",
-              midVx + 10.0, midVy, midVx + 10.0, midVy, dy);
+        // dx label above horizontal guide
+        fprintf(file,
+                "<text x='%.2f' y='%.2f' fill='purple' font-size='12' "
+                "text-anchor='middle'>%.2f</text>\n",
+                midHx, midHy - 5.0, dx);
+
+        // dy label rotated near vertical guide
+        fprintf(file,
+                "<text x='%.2f' y='%.2f' fill='purple' font-size='12' "
+                "text-anchor='middle' transform='rotate(-90 %.2f "
+                "%.2f)'>%.2f</text>\n",
+                midVx + 10.0, midVy, midVx + 10.0, midVy, dy);
+      }
     }
     stack_push(tempStack, s);
   }
