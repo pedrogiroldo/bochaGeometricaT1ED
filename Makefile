@@ -17,6 +17,9 @@ LDFLAGS = -O0
 $(PROJ_NAME): $(OBJETOS)
 	$(CC) -o $(PROJ_NAME) $(LDFLAGS) $(OBJETOS) $(LIBS)
 
+# Alias para 'make ted'
+ted: $(PROJ_NAME)
+
 # Regra para compilar arquivos .c em .o com dependências
 %.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
