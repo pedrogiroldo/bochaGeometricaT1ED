@@ -2,3 +2,4 @@
 ted
 *.svg
 *.txt
+!LEIAME.txt

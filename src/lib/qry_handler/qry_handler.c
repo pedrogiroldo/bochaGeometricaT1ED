@@ -403,6 +403,71 @@ static void execute_lc_command(Loader_t **loaders, int *loadersCount,
   stack_destroy(tempStack);
 }
 
+// Helper function to find or create a loader by ID
+static Loader_t *find_or_create_loader(Loader_t **loaders, int *loadersCount,
+                                       int loaderId, Stack stackToFree) {
+  // First, try to find existing loader
+  for (int j = 0; j < *loadersCount; j++) {
+    if ((*loaders)[j].id == loaderId) {
+      return &(*loaders)[j];
+    }
+  }
+
+  // Not found, create new loader
+  *loadersCount += 1;
+  *loaders = realloc(*loaders, *loadersCount * sizeof(Loader_t));
+  if (*loaders == NULL) {
+    printf("Error: Failed to allocate memory for Loaders\n");
+    exit(1);
+  }
+
+  // Track the (re)allocated loaders array for cleanup
+  bool loaders_already_tracked = false;
+  int stack_size_count = stack_size(stackToFree);
+  for (int i = 0; i < stack_size_count; i++) {
+    FreeItem *existing_item = (FreeItem *)stack_peek_at(stackToFree, i);
+    if (existing_item != NULL && existing_item->type == FREE_LOADERS_ARRAY) {
+      existing_item->ptr = *loaders;
+      loaders_already_tracked = true;
+      break;
+    }
+  }
+
+  if (!loaders_already_tracked) {
+    FreeItem *loaders_item = malloc(sizeof(FreeItem));
+    if (loaders_item != NULL) {
+      loaders_item->ptr = *loaders;
+      loaders_item->type = FREE_LOADERS_ARRAY;
+      stack_push(stackToFree, loaders_item);
+    }
+  }
+
+  // Initialize new loader
+  (*loaders)[*loadersCount - 1] = (Loader_t){.id = loaderId, .shapes = NULL};
+
+  // Create empty shapes stack
+  (*loaders)[*loadersCount - 1].shapes = malloc(sizeof(Stack));
+  if ((*loaders)[*loadersCount - 1].shapes == NULL) {
+    printf("Error: Failed to allocate memory for Loader stack\n");
+    exit(1);
+  }
+
+  FreeItem *stack_item = malloc(sizeof(FreeItem));
+  if (stack_item != NULL) {
+    stack_item->ptr = (*loaders)[*loadersCount - 1].shapes;
+    stack_item->type = FREE_STACK_HANDLE;
+    stack_push(stackToFree, stack_item);
+  }
+
+  *(*loaders)[*loadersCount - 1].shapes = stack_create();
+  if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
+    printf("Error: Failed to create stack for Loader\n");
+    exit(1);
+  }
+
+  return &(*loaders)[*loadersCount - 1];
+}
+
 static void execute_atch_command(Loader_t **loaders, int *loadersCount,
                                  Shooter_t **shooters, int *shootersCount,
                                  Stack stackToFree) {
@@ -417,123 +482,10 @@ static void execute_atch_command(Loader_t **loaders, int *loadersCount,
   int shooterIndex =
       find_shooter_index_by_id(shooters, *shootersCount, shooterIdInt);
   if (shooterIndex != -1) {
-    // Find left and right loaders by id; create empty ones if not found
-    Loader_t *leftLoaderPtr = NULL;
-    Loader_t *rightLoaderPtr = NULL;
-    for (int j = 0; j < *loadersCount; j++) {
-      if ((*loaders)[j].id == leftLoaderIdInt) {
-        leftLoaderPtr = &(*loaders)[j];
-      }
-      if ((*loaders)[j].id == rightLoaderIdInt) {
-        rightLoaderPtr = &(*loaders)[j];
-      }
-    }
-
-    // Create left loader if it does not exist
-    if (leftLoaderPtr == NULL) {
-      *loadersCount += 1;
-      *loaders = realloc(*loaders, *loadersCount * sizeof(Loader_t));
-      if (*loaders == NULL) {
-        printf("Error: Failed to allocate memory for Loaders\n");
-        exit(1);
-      }
-      // Track the (re)allocated loaders array for later cleanup (update
-      // existing or create new)
-      bool loaders_already_tracked = false;
-      int stack_size_count = stack_size(stackToFree);
-      for (int i = 0; i < stack_size_count; i++) {
-        FreeItem *existing_item = (FreeItem *)stack_peek_at(stackToFree, i);
-        if (existing_item != NULL &&
-            existing_item->type == FREE_LOADERS_ARRAY) {
-          // Update the existing item with the new pointer
-          existing_item->ptr = *loaders;
-          loaders_already_tracked = true;
-          break;
-        }
-      }
-
-      if (!loaders_already_tracked) {
-        FreeItem *loaders_item = malloc(sizeof(FreeItem));
-        if (loaders_item != NULL) {
-          loaders_item->ptr = *loaders;
-          loaders_item->type = FREE_LOADERS_ARRAY;
-          stack_push(stackToFree, loaders_item);
-        }
-      }
-      (*loaders)[*loadersCount - 1] =
-          (Loader_t){.id = leftLoaderIdInt, .shapes = NULL};
-      // Create empty shapes stack for the new loader
-      (*loaders)[*loadersCount - 1].shapes = malloc(sizeof(Stack));
-      if ((*loaders)[*loadersCount - 1].shapes == NULL) {
-        printf("Error: Failed to allocate memory for Loader stack\n");
-        exit(1);
-      }
-      FreeItem *stack_item = malloc(sizeof(FreeItem));
-      if (stack_item != NULL) {
-        stack_item->ptr = (*loaders)[*loadersCount - 1].shapes;
-        stack_item->type = FREE_STACK_HANDLE;
-        stack_push(stackToFree, stack_item);
-      }
-      *(*loaders)[*loadersCount - 1].shapes = stack_create();
-      if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
-        printf("Error: Failed to create stack for Loader\n");
-        exit(1);
-      }
-      leftLoaderPtr = &(*loaders)[*loadersCount - 1];
-    }
-
-    // Create right loader if it does not exist
-    if (rightLoaderPtr == NULL) {
-      *loadersCount += 1;
-      *loaders = realloc(*loaders, *loadersCount * sizeof(Loader_t));
-      if (*loaders == NULL) {
-        printf("Error: Failed to allocate memory for Loaders\n");
-        exit(1);
-      }
-      // Track the (re)allocated loaders array for later cleanup (update
-      // existing or create new)
-      bool loaders_already_tracked = false;
-      int stack_size_count = stack_size(stackToFree);
-      for (int i = 0; i < stack_size_count; i++) {
-        FreeItem *existing_item = (FreeItem *)stack_peek_at(stackToFree, i);
-        if (existing_item != NULL &&
-            existing_item->type == FREE_LOADERS_ARRAY) {
-          // Update the existing item with the new pointer
-          existing_item->ptr = *loaders;
-          loaders_already_tracked = true;
-          break;
-        }
-      }
-
-      if (!loaders_already_tracked) {
-        FreeItem *loaders_item = malloc(sizeof(FreeItem));
-        if (loaders_item != NULL) {
-          loaders_item->ptr = *loaders;
-          loaders_item->type = FREE_LOADERS_ARRAY;
-          stack_push(stackToFree, loaders_item);
-        }
-      }
-      (*loaders)[*loadersCount - 1] =
-          (Loader_t){.id = rightLoaderIdInt, .shapes = NULL};
-      // Create empty shapes stack for the new loader
-      (*loaders)[*loadersCount - 1].shapes = malloc(sizeof(Stack));
-      if ((*loaders)[*loadersCount - 1].shapes == NULL) {
-        printf("Error: Failed to allocate memory for Loader stack\n");
-        exit(1);
-      }
-      FreeItem *stack_item = malloc(sizeof(FreeItem));
-      if (stack_item != NULL) {
-        stack_item->ptr = (*loaders)[*loadersCount - 1].shapes;
-        stack_item->type = FREE_STACK_HANDLE;
-        stack_push(stackToFree, stack_item);
-      }
-      *(*loaders)[*loadersCount - 1].shapes = stack_create();
-      if (*(*loaders)[*loadersCount - 1].shapes == NULL) {
-        printf("Error: Failed to create stack for Loader\n");
-        exit(1);
-      }
-      rightLoaderPtr = &(*loaders)[*loadersCount - 1];
-    }
+    Loader_t *leftLoaderPtr = find_or_create_loader(
+        loaders, loadersCount, leftLoaderIdInt, stackToFree);
+    Loader_t *rightLoaderPtr = find_or_create_loader(
+        loaders, loadersCount, rightLoaderIdInt, stackToFree);
 
     (*shooters)[shooterIndex].leftLoader = leftLoaderPtr;
     (*shooters)[shooterIndex].rightLoader = rightLoaderPtr;
